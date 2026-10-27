@@ -10,8 +10,26 @@ const {
   screen,
   nativeImage,
   shell,
+  Menu,
 } = require('electron');
 const path = require('path');
+
+// Standard clipboard shortcuts (Ctrl+C/V/X/A) only work when an Edit menu with
+// those roles exists. Our windows are frameless / menu-hidden, so register a
+// minimal app menu for the accelerators and a right-click Paste menu for inputs.
+function enableClipboard(win) {
+  win.webContents.on('context-menu', (_e, params) => {
+    if (!params.isEditable && !params.selectionText) return;
+    const items = [];
+    if (params.isEditable) {
+      items.push({ role: 'cut' }, { role: 'copy' }, { role: 'paste' });
+      items.push({ type: 'separator' }, { role: 'selectAll' });
+    } else if (params.selectionText) {
+      items.push({ role: 'copy' });
+    }
+    Menu.buildFromTemplate(items).popup({ window: win });
+  });
+}
 
 const { loadSettings, saveSettings } = require('./settings-store');
 const { askAI, testProvider } = require('./ai');
@@ -52,6 +70,7 @@ function createOverlay() {
   // Keep it above full-screen-ish windows too.
   overlayWin.setAlwaysOnTop(true, 'screen-saver');
   overlayWin.loadFile(path.join(__dirname, 'overlay.html'));
+  enableClipboard(overlayWin);
 }
 
 // --- Settings window ---------------------------------------------------------
@@ -73,6 +92,7 @@ function openSettings() {
   });
   settingsWin.setMenuBarVisibility(false);
   settingsWin.loadFile(path.join(__dirname, 'settings.html'));
+  enableClipboard(settingsWin);
   settingsWin.on('closed', () => {
     settingsWin = null;
   });
@@ -291,6 +311,10 @@ ipcMain.on('overlay:resize', (_e, { w, h }) => {
 
 // --- Lifecycle ---------------------------------------------------------------
 app.whenReady().then(() => {
+  // A minimal menu with edit roles registers the Ctrl+C/V/X/A accelerators.
+  // The menu bar stays hidden on our windows; only the shortcuts are enabled.
+  Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'editMenu' }]));
+
   createOverlay();
   setupAutoUpdater();
 
