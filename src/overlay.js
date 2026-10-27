@@ -163,6 +163,47 @@ inputEl.addEventListener('input', () => {
   inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
 });
 
+// Visible resize grip: drag the bottom-right corner to resize the frameless
+// window. Uses screen coordinates + pointer capture so it keeps tracking even if
+// the cursor briefly leaves the window.
+const grip = document.getElementById('resize-grip');
+let resizing = false;
+let startX = 0;
+let startY = 0;
+let startW = 0;
+let startH = 0;
+let pending = null;
+let rafId = 0;
+
+function applyResize() {
+  rafId = 0;
+  if (pending) {
+    window.api.resizeTo(pending.w, pending.h);
+    pending = null;
+  }
+}
+
+grip.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  resizing = true;
+  startX = e.screenX;
+  startY = e.screenY;
+  startW = window.innerWidth;
+  startH = window.innerHeight;
+  grip.setPointerCapture(e.pointerId);
+  document.body.style.userSelect = 'none';
+});
+grip.addEventListener('pointermove', (e) => {
+  if (!resizing) return;
+  pending = { w: startW + (e.screenX - startX), h: startH + (e.screenY - startY) };
+  if (!rafId) rafId = requestAnimationFrame(applyResize);
+});
+grip.addEventListener('pointerup', (e) => {
+  resizing = false;
+  try { grip.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+  document.body.style.userSelect = '';
+});
+
 // Captures triggered by the global hotkey land here.
 window.api.onCaptureResult((dataUrl) => {
   setPendingImage(dataUrl);

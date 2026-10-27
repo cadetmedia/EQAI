@@ -283,6 +283,12 @@ ipcMain.on('overlay:toggle-clickthrough', (_e, enabled) => {
   if (overlayWin) overlayWin.setIgnoreMouseEvents(enabled, { forward: true });
 });
 
+// Resize driven by the in-UI corner grip. Clamp to the window's minimums.
+ipcMain.on('overlay:resize', (_e, { w, h }) => {
+  if (!overlayWin) return;
+  overlayWin.setSize(Math.max(280, Math.round(w)), Math.max(200, Math.round(h)));
+});
+
 // --- Lifecycle ---------------------------------------------------------------
 app.whenReady().then(() => {
   createOverlay();

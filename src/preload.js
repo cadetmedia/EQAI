@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('capture:result', (_e, dataUrl) => cb(dataUrl)),
   openSettings: () => ipcRenderer.send('overlay:open-settings'),
   setClickThrough: (on) => ipcRenderer.send('overlay:toggle-clickthrough', on),
+  resizeTo: (w, h) => ipcRenderer.send('overlay:resize', { w, h }),
   openExternal: (url) => ipcRenderer.send('open-external', url),
   getVersion: () => ipcRenderer.invoke('app:version'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),

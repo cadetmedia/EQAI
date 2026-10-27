@@ -30,6 +30,7 @@ html, body {
 }
 
 #panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -218,3 +219,22 @@ button.send {
   box-shadow: inset 0 0 0 1px #fff3cf, inset 0 1px 0 #fff;
 }
 button.send:hover { background: linear-gradient(180deg, #ffe49a, #c99b42); box-shadow: inset 0 0 0 1px #fff3cf, 0 0 10px rgba(232,193,106,0.5); }
+
+/* Visible resize grip in the bottom-right corner (frameless window) */
+#resize-grip {
+  -webkit-app-region: no-drag;
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  z-index: 50;
+  /* three diagonal gold lines */
+  background:
+    linear-gradient(135deg, transparent 0 45%, var(--gold-dim) 45% 55%, transparent 55%) no-repeat,
+    linear-gradient(135deg, transparent 0 62%, var(--gold-dim) 62% 72%, transparent 72%) no-repeat,
+    linear-gradient(135deg, transparent 0 79%, var(--gold-dim) 79% 89%, transparent 89%) no-repeat;
+  opacity: 0.7;
+}
+#resize-grip:hover { opacity: 1; }
