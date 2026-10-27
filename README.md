@@ -114,14 +114,15 @@ installs detect it. The update check compares versions with full semver preceden
 Windows runner and publishes a GitHub Release. To release:
 
 1. Bump `version` in `package.json` (e.g. `1.0.0-alpha.1`).
-2. Commit, then tag and push:
+2. Commit and push to `main`:
    ```bash
    git commit -am "Alpha 1.1"
-   git tag v1.0.0-alpha.1
-   git push origin main --tags
+   git push origin main
    ```
 3. The workflow builds `EQAI Setup …exe` + `EQAI-portable-…exe`, generates
-   `latest.json`, and attaches all three to the Release.
+   `latest.json`, creates the `v1.0.0-alpha.1` tag, and attaches all three to a new
+   GitHub Release. (Pushes that don't change the version are ignored — the release
+   for that version already exists.)
 
 Installed copies then see the update on next launch (the feed URL below resolves to
 the newest release's `latest.json`). Releases are **not** marked as GitHub
