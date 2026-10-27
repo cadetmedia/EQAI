@@ -1,14 +1,17 @@
 {
   "name": "eqai",
-  "version": "1.0.0-alpha.0",
+  "version": "1.0.0-alpha.1",
   "description": "EQAI — a resizable, always-on-top EverQuest overlay that lets you ask an AI about what's on screen (via region capture) or by typing questions.",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win"
+    "dist": "electron-builder --win --publish never"
   },
   "author": "",
   "license": "MIT",
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
   "devDependencies": {
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3"
@@ -16,7 +19,11 @@
   "build": {
     "appId": "com.cadetmedia.eqai",
     "productName": "EQAI",
-    "publish": null,
+    "publish": {
+      "provider": "github",
+      "owner": "cadetmedia",
+      "repo": "EQAI"
+    },
     "icon": "build/icon.ico",
     "files": [
       "src/**/*",
@@ -33,7 +40,8 @@
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
       "createDesktopShortcut": true,
-      "shortcutName": "EQAI"
+      "shortcutName": "EQAI",
+      "artifactName": "EQAI-Setup-${version}.exe"
     },
     "portable": {
       "artifactName": "EQAI-portable-${version}.exe"

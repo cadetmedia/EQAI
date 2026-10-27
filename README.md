@@ -1,31 +1,51 @@
-# EQ AI Overlay
+# EQAI — EverQuest Legends AI Overlay
 
-A resizable, always-on-top overlay for EverQuest (Windows) that lets you ask an
-AI about the game two ways:
+A resizable, always-on-top Windows overlay for **EverQuest Legends** that lets you
+ask an AI about the game — either by **capturing part of the screen** (an item
+tooltip, a quest window, a mob) or by **typing a question**. Answers are
+web-searched and cited, with a clear flag whenever a source falls outside your
+trusted list.
 
-1. **Capture a screen region** (📷 button or `Ctrl+Shift+A`) — drag a box over an
-   item tooltip, quest window, mob, map, etc. The image is sent to the AI with
-   your question.
-2. **Type a question** — "Where does the Priest of Discord spawn?", "What drops
-   the Fungi Tunic?" — answered as a chat.
+> EverQuest Legends is the Daybreak / Game Jawn reimagining of classic EverQuest
+> (launched July 28, 2026). EQAI is built specifically for it.
 
-The AI backend is pluggable: use **Claude** or **OpenAI**, switchable in Settings.
+## ⬇ Download (Windows)
 
-## Requirements
+### **[Get the latest release →](https://github.com/cadetmedia/EQAI/releases/latest)**
 
-- Windows 10/11
-- [Node.js](https://nodejs.org/) 18+ (only to run/build from source)
-- An API key for Claude (Anthropic) and/or OpenAI
+- **`EQAI-portable-*.exe`** — just double-click, no install. Easiest to share.
+- **`EQAI-Setup-*.exe`** — installer with Start-menu / desktop shortcuts and
+  **silent auto-updates**.
 
-## Run it (from source)
+On first launch Windows SmartScreen will warn (the app is unsigned) → click
+**More info → Run anyway**. Then open **⚙ Settings** and connect your own AI account.
+
+## What it does
+
+- 📷 **Screen-capture questions** — `Ctrl+Shift+A`, drag a box over anything in game, ask about it.
+- 💬 **Typed questions** — quests, drops, spawns, strategy.
+- 🔎 **Web-searched + cited** — every answer is grounded in real pages and tagged
+  **trusted** / **outside** against your source list (official site, `eqlwiki.com`,
+  `r/EQLegends`, …), so you always know where it came from.
+- 🔑 **Bring your own AI account** — **Google Gemini (free tier)**, Claude, or
+  OpenAI, with a guided setup. Your key stays on your PC; you pay only for your use.
+- ⬆ **Auto-updates** — checks on every launch; the installer updates silently.
+- 🎮 EverQuest-styled, resizable, always-on-top; runs over borderless-windowed EQ.
+
+---
+
+## For developers
+
+### Run from source
 
 ```bash
-cd eq-ai-overlay
+git clone https://github.com/cadetmedia/EQAI.git
+cd EQAI
 npm install
 npm start
 ```
 
-Then click **⚙ Settings**, choose your provider, paste your API key, and Save.
+Then **⚙ Settings** → pick a provider → paste a key → Save.
 
 ## Build a Windows installer (.exe)
 

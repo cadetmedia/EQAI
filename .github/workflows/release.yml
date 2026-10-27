@@ -63,8 +63,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_NOTES: ${{ github.event.head_commit.message }}
         run: |
+          shopt -s nullglob
+          files=(dist/*.exe dist/*.blockmap dist/latest.yml dist/latest.json)
           gh release create "${{ steps.ver.outputs.tag }}" \
             --target main \
             --title "EQAI ${{ steps.ver.outputs.tag }}" \
             --notes "${RELEASE_NOTES:-Release ${{ steps.ver.outputs.tag }}}" \
-            dist/*.exe dist/latest.json
+            "${files[@]}"

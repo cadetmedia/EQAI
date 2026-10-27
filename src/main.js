@@ -16,6 +16,13 @@ const path = require('path');
 const { loadSettings, saveSettings } = require('./settings-store');
 const { askAI, testProvider } = require('./ai');
 const { friendlyLabel, compareVersions } = require('./version');
+const { autoUpdater } = require('electron-updater');
+
+// Silent auto-update only applies to the INSTALLED build. The portable exe can't
+// replace itself, and dev runs aren't packaged, so those fall back to the
+// lightweight latest.json check + a "download" link.
+const IS_PORTABLE = !!process.env.PORTABLE_EXECUTABLE_DIR;
+const CAN_AUTO_UPDATE = app.isPackaged && !IS_PORTABLE;
 
 let overlayWin = null;
 let settingsWin = null;
@@ -182,16 +189,16 @@ ipcMain.handle('ai:test', async (_e, { provider, cfg }) => {
   }
 });
 
-// Current app version + friendly label.
+// Current app version + friendly label + which update mode is in effect.
 ipcMain.handle('app:version', () => {
   const version = app.getVersion();
-  return { version, label: friendlyLabel(version) };
+  return { version, label: friendlyLabel(version), autoUpdate: CAN_AUTO_UPDATE, portable: IS_PORTABLE };
 });
 
-// Check the update feed for a newer release.
-ipcMain.handle('update:check', async () => {
+// Portable / dev fallback: read latest.json and compare versions ourselves.
+async function checkLatestJson() {
   const current = app.getVersion();
-  const base = { current, currentLabel: friendlyLabel(current) };
+  const base = { current, currentLabel: friendlyLabel(current), mode: 'manual' };
   const url = loadSettings().updateFeedUrl;
   if (!url) return { ...base, error: 'No update server is configured.' };
   try {
@@ -214,7 +221,57 @@ ipcMain.handle('update:check', async () => {
   } catch {
     return { ...base, error: 'Could not reach the update server.' };
   }
+}
+
+// Manual "Check for updates". Installed build hands off to electron-updater
+// (which downloads silently and emits events); everything else uses latest.json.
+ipcMain.handle('update:check', async () => {
+  const current = app.getVersion();
+  if (CAN_AUTO_UPDATE) {
+    try {
+      autoUpdater.checkForUpdates();
+    } catch (err) {
+      sendUpdateEvent({ state: 'error', error: err.message || String(err) });
+    }
+    return { mode: 'auto', current, currentLabel: friendlyLabel(current) };
+  }
+  return checkLatestJson();
 });
+
+// Installed build: apply the downloaded update now (quits, installs, relaunches).
+ipcMain.on('update:install', () => {
+  if (CAN_AUTO_UPDATE) autoUpdater.quitAndInstall();
+});
+
+function sendUpdateEvent(ev) {
+  if (overlayWin && !overlayWin.isDestroyed()) {
+    overlayWin.webContents.send('update:event', ev);
+  }
+}
+
+// Wire electron-updater for the installed build: download silently, then prompt
+// the user to restart to apply.
+function setupAutoUpdater() {
+  if (!CAN_AUTO_UPDATE) return;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-available', (info) => {
+    sendUpdateEvent({ state: 'downloading', version: info.version, label: friendlyLabel(info.version) });
+  });
+  autoUpdater.on('update-not-available', () => {
+    sendUpdateEvent({ state: 'none' });
+  });
+  autoUpdater.on('update-downloaded', (info) => {
+    sendUpdateEvent({ state: 'ready', version: info.version, label: friendlyLabel(info.version) });
+  });
+  autoUpdater.on('error', (err) => {
+    sendUpdateEvent({ state: 'error', error: (err && err.message) || String(err) });
+  });
+
+  // Check shortly after launch (give the overlay time to attach its listener).
+  setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 3000);
+}
 
 // Open cited source links in the user's real browser, not inside the overlay.
 ipcMain.on('open-external', (_e, url) => {
@@ -229,6 +286,7 @@ ipcMain.on('overlay:toggle-clickthrough', (_e, enabled) => {
 // --- Lifecycle ---------------------------------------------------------------
 app.whenReady().then(() => {
   createOverlay();
+  setupAutoUpdater();
 
   const settings = loadSettings();
   const hotkey = settings.captureHotkey || 'CommandOrControl+Shift+A';

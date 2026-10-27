@@ -239,19 +239,59 @@ async function autoCheckUpdate() {
   }
 }
 
+// A single reusable banner for the installed build's silent-update progress.
+let updBannerEl = null;
+function updBanner() {
+  if (!updBannerEl || updBannerEl.parentNode !== messagesEl) {
+    updBannerEl = document.createElement('div');
+    updBannerEl.className = 'msg ai update';
+    messagesEl.appendChild(updBannerEl);
+  }
+  updBannerEl.innerHTML = '';
+  return updBannerEl;
+}
+
+function handleUpdateEvent(ev) {
+  if (!ev) return;
+  if (ev.state === 'downloading') {
+    const el = updBanner();
+    const p = document.createElement('div');
+    p.textContent = `⬇ Downloading update${ev.label ? ' ' + ev.label : ''}…`;
+    el.appendChild(p);
+  } else if (ev.state === 'ready') {
+    const el = updBanner();
+    const p = document.createElement('div');
+    p.innerHTML = `✅ <b>Update ready${ev.label ? ': ' + ev.label : ''}</b> — restart to apply.`;
+    el.appendChild(p);
+    const btn = document.createElement('button');
+    btn.textContent = '↻ Restart & install';
+    btn.addEventListener('click', () => window.api.installUpdate());
+    el.appendChild(btn);
+  }
+  // 'none' / 'error' are surfaced by the manual check in Settings, not here.
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
 (async () => {
-  // Show the current version in the title bar.
+  let autoUpdate = false;
   try {
     const v = await window.api.getVersion();
     document.getElementById('version').textContent = v.label;
+    autoUpdate = !!v.autoUpdate;
   } catch { /* ignore */ }
 
   await checkConnection();
   if (connected) showReady();
   else showConnectPrompt();
 
-  // Look for a newer release every time the app opens.
-  autoCheckUpdate();
+  if (autoUpdate) {
+    // Installed build: electron-updater downloads in the background and emits
+    // events; we just listen and prompt to restart when it's ready.
+    window.api.onUpdateEvent(handleUpdateEvent);
+  } else {
+    // Portable / dev: lightweight latest.json check with a download link.
+    autoCheckUpdate();
+  }
 })();
 
 // After connecting in Settings, returning focus to the overlay refreshes state.

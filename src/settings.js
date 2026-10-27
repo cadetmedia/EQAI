@@ -54,7 +54,9 @@ function syncProviderBlocks() {
 document.getElementById('check').addEventListener('click', async () => {
   els.updStatus.textContent = 'Checking…';
   const res = await window.api.checkUpdate();
-  if (res.error) {
+  if (res.mode === 'auto') {
+    els.updStatus.textContent = "Checking… you'll be prompted in the overlay to restart when an update is ready.";
+  } else if (res.error) {
     els.updStatus.textContent = `⚠ ${res.error}`;
   } else if (res.updateAvailable) {
     els.updStatus.innerHTML =

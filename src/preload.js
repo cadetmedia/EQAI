@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('api', {
   openExternal: (url) => ipcRenderer.send('open-external', url),
   getVersion: () => ipcRenderer.invoke('app:version'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
+  installUpdate: () => ipcRenderer.send('update:install'),
+  onUpdateEvent: (cb) => ipcRenderer.on('update:event', (_e, ev) => cb(ev)),
 
   // Selector window
   getSelectorImage: () => ipcRenderer.invoke('selector:image'),
