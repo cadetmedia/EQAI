@@ -29,8 +29,21 @@ On first launch Windows SmartScreen will warn (the app is unsigned) → click
   `r/EQLegends`, …), so you always know where it came from.
 - 🔑 **Bring your own AI account** — **Google Gemini (free tier)**, Claude, or
   OpenAI, with a guided setup. Your key stays on your PC; you pay only for your use.
+- 🧭 **Live log context** — reads your EQ log (`/log on`) to know your zone, character
+  and recent kills/loot, so you can just ask "what camps **here**?" (no injection, no
+  memory reads — log file only).
+- ⚡ **Local answer cache** — repeat questions are instant and free; eqlwiki page data
+  can ground answers for accuracy.
 - ⬆ **Auto-updates** — checks on every launch; the installer updates silently.
 - 🎮 EverQuest-styled, resizable, always-on-top; runs over borderless-windowed EQ.
+
+## Screenshots
+
+| In-game overlay | First run | Settings |
+|---|---|---|
+| ![EQAI overlay answering a question, with live zone context and cited sources](docs/screenshots/overlay.png) | ![EQAI welcome / connect-your-account screen](docs/screenshots/welcome.png) | ![EQAI settings: provider, trusted sources, log folder](docs/screenshots/settings.png) |
+
+*The overlay floats over the game; the green strip shows live context read from your EQ log, and every answer is tagged **trusted**/**outside** with its sources.*
 
 ---
 
