@@ -11,8 +11,9 @@ let pendingImage = null; // data URL of a captured region waiting to be sent
 let history = [];
 const MAX_HISTORY = 12;
 
-// The answer element currently being streamed into (receives ai:delta chunks).
-let activeAnswerSpan = null;
+// Active answer bubbles keyed by request id (receives ai:delta chunks).
+const streams = new Map();
+let reqCounter = 0;
 
 function addMessage(role, text, imageDataUrl) {
   const el = document.createElement('div');
@@ -34,14 +35,21 @@ function addMessage(role, text, imageDataUrl) {
 
 // --- Minimal, safe markdown -> HTML (escapes first, then adds our own tags) ---
 function escapeHtml(s) {
-  return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+// URL char class excludes whitespace, quotes and angle brackets so a URL can't
+// break out of the data-url attribute. The title shows the real destination so a
+// link labelled one thing but pointing elsewhere is visible on hover.
+function mdLink(text, url) {
+  return `<a href="#" data-url="${url}" title="${url}">${text}</a>`;
 }
 function inlineMd(s) {
   s = s.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`);
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
-  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, t, u) => `<a href="#" data-url="${u}">${t}</a>`);
-  s = s.replace(/(^|[\s(])(https?:\/\/[^\s)<]+)/g, (_m, pre, u) => `${pre}<a href="#" data-url="${u}">${u}</a>`);
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)"'<>]+)\)/g, (_m, t, u) => mdLink(t, u));
+  s = s.replace(/(^|[\s(])(https?:\/\/[^\s)"'<>]+)/g, (_m, pre, u) => `${pre}${mdLink(u, u)}`);
   return s;
 }
 function renderMarkdown(text) {
@@ -115,6 +123,8 @@ async function send(presetText) {
   setPendingImage(null);
 
   // Create the answer bubble; streamed tokens land in `body` as they arrive.
+  // Each request has its own id so concurrent streams never cross wires.
+  const reqId = ++reqCounter;
   const el = document.createElement('div');
   el.className = 'msg ai';
   const body = document.createElement('div');
@@ -123,14 +133,15 @@ async function send(presetText) {
   el.appendChild(body);
   messagesEl.appendChild(el);
   messagesEl.scrollTop = messagesEl.scrollHeight;
-  activeAnswerSpan = body;
+  streams.set(reqId, body);
 
-  const res = await window.api.ask({ text, imageDataUrl: imageToSend, history });
-  activeAnswerSpan = null;
+  const res = await window.api.ask({ text, imageDataUrl: imageToSend, history, reqId });
+  streams.delete(reqId);
 
   if (res.ok) {
     finishAnswer(el, body, res);
-    history.push({ role: 'user', text });
+    // Image-only turns store a placeholder so providers don't drop an empty turn.
+    history.push({ role: 'user', text: text || '[sent a screenshot]' });
     history.push({ role: 'assistant', text: res.answer || '' });
     if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
   } else {
@@ -174,7 +185,7 @@ function finishAnswer(el, body, res) {
       tag.className = 'tag ' + (c.trusted ? 'trusted' : 'outside');
       tag.textContent = c.trusted ? 'trusted' : 'outside';
       const link = document.createElement('a');
-      link.href = c.url;
+      link.href = '#'; // never a real navigable href
       link.className = 'source-link';
       link.textContent = c.title || c.host || c.url;
       link.title = c.url;
@@ -205,15 +216,21 @@ function finishAnswer(el, body, res) {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-// Streamed tokens from the main process append into the active answer bubble.
-window.api.onAiDelta((chunk) => {
-  if (!activeAnswerSpan) return;
-  if (activeAnswerSpan.dataset.started !== '1') {
-    activeAnswerSpan.textContent = '';
-    activeAnswerSpan.dataset.started = '1';
+// Streamed tokens are routed to the bubble for their request id.
+window.api.onAiDelta(({ id, chunk }) => {
+  const span = streams.get(id);
+  if (!span) return;
+  if (span.dataset.started !== '1') {
+    span.textContent = '';
+    span.dataset.started = '1';
   }
-  activeAnswerSpan.textContent += chunk;
+  span.textContent += chunk;
   messagesEl.scrollTop = messagesEl.scrollHeight;
+});
+
+// Surface a failed hotkey registration instead of silently ignoring it.
+window.api.onHotkeyFailed((accel) => {
+  addMessage('error', `⚠ Couldn't register the capture hotkey "${accel}" — it may be in use by another app. Pick a different one in ⚙ Settings.`);
 });
 
 async function capture() {
@@ -263,15 +280,12 @@ opacityRange.addEventListener('input', () => {
   try { localStorage.setItem('panelOpacity', opacityRange.value); } catch { /* ignore */ }
 });
 
-// Click-through: when active, mouse events pass to the game. The title bar stays
-// interactive via a short grace toggle (click the button again to regain control).
+// Click-through: when active, mouse events pass to the game. Main owns the state
+// and also exposes a global hotkey (Ctrl+Shift+X) so it can never trap the user.
 const ctBtn = document.getElementById('btn-clickthrough');
-let clickThrough = false;
-ctBtn.addEventListener('click', () => {
-  clickThrough = !clickThrough;
-  ctBtn.classList.toggle('active', clickThrough);
-  window.api.setClickThrough(clickThrough);
-});
+ctBtn.addEventListener('click', () => window.api.toggleClickThrough());
+ctBtn.title = 'Toggle click-through (Ctrl+Shift+X to undo if the panel stops responding)';
+window.api.onClickThroughState((on) => ctBtn.classList.toggle('active', !!on));
 
 // Enter sends; Shift+Enter makes a newline. Auto-grow the textarea.
 inputEl.addEventListener('keydown', (e) => {
@@ -337,9 +351,8 @@ let connected = false;
 
 async function checkConnection() {
   try {
-    const s = await window.api.getSettings();
-    const cfg = (s && s[s.provider]) || {};
-    connected = Boolean(cfg.apiKey);
+    const s = await window.api.getConnected();
+    connected = Boolean(s && s.connected);
   } catch {
     connected = false;
   }
@@ -373,9 +386,15 @@ function showUpdateBanner(res) {
   const el = document.createElement('div');
   el.className = 'msg ai update';
   const p = document.createElement('div');
-  p.innerHTML =
-    `⬆ <b>Update available:</b> ${res.latestLabel} ` +
-    `<span style="color:var(--amber-dim)">(you have ${res.currentLabel})</span>`;
+  const strong = document.createElement('b');
+  strong.textContent = '⬆ Update available: ';
+  const latest = document.createTextNode(String(res.latestLabel || ''));
+  const have = document.createElement('span');
+  have.style.color = 'var(--amber-dim)';
+  have.textContent = ` (you have ${res.currentLabel || ''})`;
+  p.appendChild(strong);
+  p.appendChild(latest);
+  p.appendChild(have);
   el.appendChild(p);
   if (res.notes) {
     const n = document.createElement('div');
@@ -424,7 +443,10 @@ function handleUpdateEvent(ev) {
   } else if (ev.state === 'ready') {
     const el = updBanner();
     const p = document.createElement('div');
-    p.innerHTML = `✅ <b>Update ready${ev.label ? ': ' + ev.label : ''}</b> — restart to apply.`;
+    const b = document.createElement('b');
+    b.textContent = `✅ Update ready${ev.label ? ': ' + ev.label : ''}`;
+    p.appendChild(b);
+    p.appendChild(document.createTextNode(' — restart to apply.'));
     el.appendChild(p);
     const btn = document.createElement('button');
     btn.textContent = '↻ Restart & install';

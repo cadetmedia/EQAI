@@ -12,13 +12,18 @@ on:
 permissions:
   contents: write
 
+# Don't let two quick pushes race to publish the same release.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-release:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4.1.0
         with:
           node-version: '20'
           cache: 'npm'
@@ -66,7 +71,7 @@ jobs:
           shopt -s nullglob
           files=(dist/*.exe dist/*.blockmap dist/latest.yml dist/latest.json)
           gh release create "${{ steps.ver.outputs.tag }}" \
-            --target main \
+            --target "${{ github.sha }}" \
             --title "EQAI ${{ steps.ver.outputs.tag }}" \
             --notes "${RELEASE_NOTES:-Release ${{ steps.ver.outputs.tag }}}" \
             "${files[@]}"

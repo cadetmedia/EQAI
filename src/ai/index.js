@@ -84,7 +84,7 @@ function isTrusted(url, trustedSources) {
   return (trustedSources || []).some((e) => matchesSource(url, e));
 }
 
-async function askAI(settings, { text, imageDataUrl, history }, onDelta) {
+async function askAI(settings, { text, imageDataUrl, history, signal }, onDelta) {
   const name = settings.provider || 'claude';
   const provider = PROVIDERS[name];
   if (!provider) throw new Error(`Unknown AI provider: ${name}`);
@@ -102,6 +102,7 @@ async function askAI(settings, { text, imageDataUrl, history }, onDelta) {
     imageDataUrl,
     systemPrompt,
     history,
+    signal,
     trustedSources: settings.trustedSources,
   }, onDelta);
 

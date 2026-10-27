@@ -162,8 +162,9 @@ install, which also means it works for the portable build.)
 
 ## Possible next steps
 
-- Streaming responses (type-out effect) instead of wait-then-show
-- Conversation memory across turns (currently each ask is standalone)
-- A local quest/item database to ground answers and cut API cost
-- Multi-monitor region picking
-- Per-question hotkeys / quick prompts ("identify this item", "summarize this quest")
+- Reading the EQ log file for auto-context (zone, cons, item links, spawn timers)
+- A local cache/knowledge base of past answers to cut API cost and speed repeats
+- A character profile (class/level/race) auto-added to the prompt
+- Multi-monitor region picking and one-key re-capture of the last region
+- A live model dropdown pulled from each provider's models endpoint
+- Code signing to remove the first-download SmartScreen warning

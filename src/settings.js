@@ -32,11 +32,17 @@ function syncProviderBlocks() {
 (async () => {
   const s = await window.api.getSettings();
   els.provider.value = s.provider;
-  els.claudeKey.value = s.claude.apiKey || '';
+  // Keys are never sent to the renderer. Show a "saved" placeholder when one
+  // exists; leaving the field blank on Save keeps the stored key unchanged.
+  const markKey = (input, hasKey) => {
+    input.value = '';
+    input.placeholder = hasKey ? '•••••••••• (saved — leave blank to keep)' : input.placeholder;
+  };
+  markKey(els.claudeKey, s.claude.hasKey);
   els.claudeModel.value = s.claude.model || '';
-  els.openaiKey.value = s.openai.apiKey || '';
+  markKey(els.openaiKey, s.openai.hasKey);
   els.openaiModel.value = s.openai.model || '';
-  els.geminiKey.value = s.gemini.apiKey || '';
+  markKey(els.geminiKey, s.gemini.hasKey);
   els.geminiModel.value = s.gemini.model || '';
   els.hotkey.value = s.captureHotkey || '';
   els.sources.value = (s.trustedSources || []).join('\n');
@@ -59,11 +65,16 @@ document.getElementById('check').addEventListener('click', async () => {
   } else if (res.error) {
     els.updStatus.textContent = `⚠ ${res.error}`;
   } else if (res.updateAvailable) {
-    els.updStatus.innerHTML =
-      `⬆ ${res.latestLabel} available — ` +
-      (res.url ? `<a href="#" id="dl">Download</a>` : 'see release page');
-    const dl = document.getElementById('dl');
-    if (dl) dl.addEventListener('click', (e) => { e.preventDefault(); window.api.openExternal(res.url); });
+    els.updStatus.textContent = `⬆ ${res.latestLabel} available — `;
+    if (res.url) {
+      const dl = document.createElement('a');
+      dl.href = '#';
+      dl.textContent = 'Download';
+      dl.addEventListener('click', (e) => { e.preventDefault(); window.api.openExternal(res.url); });
+      els.updStatus.appendChild(dl);
+    } else {
+      els.updStatus.appendChild(document.createTextNode('see release page'));
+    }
   } else {
     els.updStatus.textContent = "✓ You're on the latest version";
   }

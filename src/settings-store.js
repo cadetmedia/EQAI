@@ -1,39 +1,22 @@
-// Tiny JSON-file settings store in Electron's userData dir. Keeps API keys and
-// preferences local to the machine; no external dependency needed.
-const { app } = require('electron');
+// Settings store in Electron's userData dir. API keys are encrypted at rest with
+// the OS keystore (safeStorage / Windows DPAPI) and written atomically so a crash
+// mid-write can't corrupt the file and wipe the user's keys.
+const { app, safeStorage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
 const FILE = path.join(app.getPath('userData'), 'settings.json');
+const KEY_FIELDS = ['claude', 'openai', 'gemini'];
+const ENC_PREFIX = 'enc:v1:';
 
 const DEFAULTS = {
   provider: 'gemini', // 'gemini' | 'claude' | 'openai' — default to the free tier
   captureHotkey: 'CommandOrControl+Shift+A',
-  claude: {
-    apiKey: '',
-    // Configurable so you can point it at whatever model your account offers.
-    // Must be a model that supports the web search tool.
-    model: 'claude-sonnet-4-5',
-  },
-  openai: {
-    apiKey: '',
-    model: 'gpt-4o',
-  },
-  gemini: {
-    apiKey: '',
-    model: 'gemini-2.0-flash',
-  },
-  // Remembered overlay window position/size ({x,y,width,height} or null).
+  claude: { apiKey: '', model: 'claude-sonnet-4-5' },
+  openai: { apiKey: '', model: 'gpt-4o' },
+  gemini: { apiKey: '', model: 'gemini-2.0-flash' },
   windowBounds: null,
-  // Where the app checks for a newer release. Should return JSON like:
-  //   { "version": "1.0.0-alpha.1", "label": "Alpha 1.1",
-  //     "url": "https://.../EQAI-portable-1.0.0-alpha.1.exe", "notes": "..." }
-  // Stable URL that always redirects to the newest release's latest.json asset,
-  // published by the GitHub Actions release workflow.
   updateFeedUrl: 'https://github.com/cadetmedia/EQAI/releases/latest/download/latest.json',
-  // Credible sources for EverQuest Legends. Answers citing these are tagged
-  // "trusted"; anything else is flagged as outside your trusted sources.
-  // Bare domains (subdomains match automatically). Editable in Settings.
   trustedSources: [
     'everquestlegends.com',
     'eqlwiki.com',
@@ -41,36 +24,67 @@ const DEFAULTS = {
     'eqprogression.com',
     'reddit.com/r/EQLegends',
   ],
-  // Optional extra persona/tone instructions. The core policy (game identity +
-  // source rules) is always enforced on top of this and cannot be removed here.
   personaPrompt:
     'Be concise and practical, like a helpful high-level EverQuest player ' +
     'giving another player a straight answer.',
 };
 
-function loadSettings() {
+function encKey(v) {
+  if (!v) return v || '';
   try {
-    const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-    return {
-      ...DEFAULTS,
-      ...raw,
-      claude: { ...DEFAULTS.claude, ...(raw.claude || {}) },
-      openai: { ...DEFAULTS.openai, ...(raw.openai || {}) },
-      gemini: { ...DEFAULTS.gemini, ...(raw.gemini || {}) },
-      trustedSources: Array.isArray(raw.trustedSources)
-        ? raw.trustedSources
-        : DEFAULTS.trustedSources,
-    };
+    if (safeStorage.isEncryptionAvailable()) {
+      return ENC_PREFIX + safeStorage.encryptString(v).toString('base64');
+    }
+  } catch { /* fall back to plaintext below */ }
+  return v;
+}
+
+function decKey(v) {
+  if (typeof v === 'string' && v.startsWith(ENC_PREFIX)) {
+    try {
+      return safeStorage.decryptString(Buffer.from(v.slice(ENC_PREFIX.length), 'base64'));
+    } catch {
+      return '';
+    }
+  }
+  return v || '';
+}
+
+function atomicWrite(file, data) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(tmp, data, 'utf8');
+  fs.renameSync(tmp, file);
+}
+
+function loadSettings() {
+  let raw;
+  try {
+    raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
   } catch {
     return { ...DEFAULTS };
   }
+  const merged = {
+    ...DEFAULTS,
+    ...raw,
+    claude: { ...DEFAULTS.claude, ...(raw.claude || {}) },
+    openai: { ...DEFAULTS.openai, ...(raw.openai || {}) },
+    gemini: { ...DEFAULTS.gemini, ...(raw.gemini || {}) },
+    trustedSources: Array.isArray(raw.trustedSources) ? raw.trustedSources : DEFAULTS.trustedSources,
+  };
+  for (const p of KEY_FIELDS) merged[p].apiKey = decKey(merged[p].apiKey);
+  return merged;
 }
 
 function saveSettings(next) {
   const merged = { ...loadSettings(), ...next };
-  fs.mkdirSync(path.dirname(FILE), { recursive: true });
-  fs.writeFileSync(FILE, JSON.stringify(merged, null, 2), 'utf8');
-  return merged;
+  for (const p of KEY_FIELDS) merged[p] = { ...(merged[p] || DEFAULTS[p]) };
+
+  // Encrypt key fields only for the on-disk copy.
+  const onDisk = { ...merged };
+  for (const p of KEY_FIELDS) onDisk[p] = { ...merged[p], apiKey: encKey(merged[p].apiKey) };
+  atomicWrite(FILE, JSON.stringify(onDisk, null, 2));
+  return merged; // decrypted, for in-process use
 }
 
 module.exports = { loadSettings, saveSettings };

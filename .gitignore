@@ -4,3 +4,6 @@ dist/
 
 # Generated/preview assets (keep the source icon.svg + built icon.ico/png)
 build/preview-*.png
+
+# Stray artifacts
+*.bundle

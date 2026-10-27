@@ -9,20 +9,25 @@ function splitDataUrl(dataUrl) {
   return { mediaType: m[1], data: m[2] };
 }
 
-// Gemini grounding returns Google redirect URLs; resolve to the real source.
+// Gemini grounding returns Google redirect URLs. Resolve with redirect:'manual'
+// so we only ever contact Google's redirect host (never the arbitrary final
+// site), reading the Location header to learn the real URL. This avoids leaking
+// the player's IP to third parties and can't be pointed at localhost/LAN.
 async function resolveFinal(url) {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 6000);
-    const res = await fetch(url, { redirect: 'follow', signal: ctrl.signal });
+    const res = await fetch(url, { redirect: 'manual', signal: ctrl.signal });
     clearTimeout(t);
-    return res.url || url;
+    const loc = res.headers.get('location');
+    if (loc && /^https?:\/\//i.test(loc)) return loc;
+    return url;
   } catch {
     return url;
   }
 }
 
-async function ask(cfg, { text, imageDataUrl, systemPrompt, history }, onDelta) {
+async function ask(cfg, { text, imageDataUrl, systemPrompt, history, signal }, onDelta) {
   const parts = [{ text: text || 'What am I looking at in EverQuest Legends?' }];
   if (imageDataUrl) {
     const img = splitDataUrl(imageDataUrl);
@@ -37,9 +42,10 @@ async function ask(cfg, { text, imageDataUrl, systemPrompt, history }, onDelta) 
   contents.push({ role: 'user', parts });
 
   const model = cfg.model || 'gemini-2.0-flash';
-  const res = await fetch(`${BASE}/${model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(cfg.apiKey)}`, {
+  const res = await fetch(`${BASE}/${model}:streamGenerateContent?alt=sse`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    signal,
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': cfg.apiKey },
     body: JSON.stringify({
       system_instruction: { parts: [{ text: systemPrompt }] },
       contents,
@@ -77,9 +83,9 @@ async function ask(cfg, { text, imageDataUrl, systemPrompt, history }, onDelta) 
 
 async function test(cfg) {
   const model = cfg.model || 'gemini-2.0-flash';
-  const res = await fetch(`${BASE}/${model}:generateContent?key=${encodeURIComponent(cfg.apiKey)}`, {
+  const res = await fetch(`${BASE}/${model}:generateContent`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': cfg.apiKey },
     body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'ping' }] }], generationConfig: { maxOutputTokens: 8 } }),
   });
   if (!res.ok) {

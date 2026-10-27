@@ -14,12 +14,13 @@ function buildInput(history, systemPrompt, userContent) {
   return input;
 }
 
-async function ask(cfg, { text, imageDataUrl, systemPrompt, history }, onDelta) {
+async function ask(cfg, { text, imageDataUrl, systemPrompt, history, signal }, onDelta) {
   const userContent = [{ type: 'input_text', text: text || 'What am I looking at in EverQuest Legends?' }];
   if (imageDataUrl) userContent.push({ type: 'input_image', image_url: imageDataUrl });
 
   const res = await fetch(ENDPOINT, {
     method: 'POST',
+    signal,
     headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
     body: JSON.stringify({
       model: cfg.model || 'gpt-4o',

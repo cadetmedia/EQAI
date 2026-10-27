@@ -31,6 +31,34 @@ function enableClipboard(win) {
   });
 }
 
+// Security: never let a window navigate away from our bundled pages or spawn a
+// new Electron window. External links are handed to the system browser instead.
+function hardenWindow(win) {
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (e, url) => {
+    if (!url.startsWith('file://')) {
+      e.preventDefault();
+      if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    }
+  });
+  win.webContents.on('will-attach-webview', (e) => e.preventDefault());
+}
+
+// Click-through state (shared by the 👆 button and a global toggle hotkey).
+let clickThrough = false;
+function setClickThrough(on) {
+  clickThrough = !!on;
+  if (overlayWin && !overlayWin.isDestroyed()) {
+    overlayWin.setIgnoreMouseEvents(clickThrough, { forward: true });
+    overlayWin.webContents.send('clickthrough:state', clickThrough);
+  }
+}
+
+let capturing = false; // guards against re-entrant captures
+
 const { loadSettings, saveSettings } = require('./settings-store');
 const { askAI, testProvider } = require('./ai');
 const { friendlyLabel, compareVersions } = require('./version');
@@ -99,6 +127,7 @@ function createOverlay() {
   overlayWin.setAlwaysOnTop(true, 'screen-saver');
   overlayWin.loadFile(path.join(__dirname, 'overlay.html'));
   enableClipboard(overlayWin);
+  hardenWindow(overlayWin);
 
   // Remember where the user puts it / sizes it.
   overlayWin.on('moved', persistOverlayBounds);
@@ -125,6 +154,7 @@ function openSettings() {
   settingsWin.setMenuBarVisibility(false);
   settingsWin.loadFile(path.join(__dirname, 'settings.html'));
   enableClipboard(settingsWin);
+  hardenWindow(settingsWin);
   settingsWin.on('closed', () => {
     settingsWin = null;
   });
@@ -135,41 +165,44 @@ function openSettings() {
 // a frozen-frame selector the user drags a rectangle over. We crop from that
 // exact captured image, so the selection maps 1:1 with no scale-factor drift.
 async function captureRegion() {
-  const display = screen.getDisplayMatching(overlayWin.getBounds());
-  const { width, height } = display.size;
-  const scale = display.scaleFactor || 1;
+  if (capturing || !overlayWin) return null; // ignore re-entrant triggers
+  capturing = true;
+  try {
+    const display = screen.getDisplayMatching(overlayWin.getBounds());
+    const { width, height } = display.size;
+    const scale = display.scaleFactor || 1;
 
-  // Hide our own UI so it isn't in the shot.
-  const wasVisible = overlayWin.isVisible();
-  overlayWin.hide();
-  await new Promise((r) => setTimeout(r, 150));
+    // Hide our own UI so it isn't in the shot.
+    const wasVisible = overlayWin.isVisible();
+    overlayWin.hide();
+    await new Promise((r) => setTimeout(r, 150));
 
-  const sources = await desktopCapturer.getSources({
-    types: ['screen'],
-    thumbnailSize: { width: Math.round(width * scale), height: Math.round(height * scale) },
-  });
-  if (wasVisible) overlayWin.show();
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: Math.round(width * scale), height: Math.round(height * scale) },
+    });
+    if (wasVisible) overlayWin.show();
 
-  // Match the captured source to our display when possible.
-  const source =
-    sources.find((s) => String(s.display_id) === String(display.id)) || sources[0];
-  if (!source) return null;
+    const source =
+      sources.find((s) => String(s.display_id) === String(display.id)) || sources[0];
+    if (!source) return null;
 
-  const fullImage = source.thumbnail; // NativeImage at full res
-  const dataUrl = fullImage.toDataURL();
+    const fullImage = source.thumbnail;
+    const dataUrl = fullImage.toDataURL();
 
-  // Show the selector with the frozen screenshot as its backdrop.
-  const rect = await runSelector(display, dataUrl);
-  if (!rect || rect.width < 4 || rect.height < 4) return null;
+    const rect = await runSelector(display, dataUrl);
+    if (!rect || rect.width < 4 || rect.height < 4) return null;
 
-  // rect comes back in CSS pixels of the display; convert to image pixels.
-  const cropped = fullImage.crop({
-    x: Math.round(rect.x * scale),
-    y: Math.round(rect.y * scale),
-    width: Math.round(rect.width * scale),
-    height: Math.round(rect.height * scale),
-  });
-  return cropped.toDataURL();
+    const cropped = fullImage.crop({
+      x: Math.round(rect.x * scale),
+      y: Math.round(rect.y * scale),
+      width: Math.round(rect.width * scale),
+      height: Math.round(rect.height * scale),
+    });
+    return cropped.toDataURL();
+  } finally {
+    capturing = false;
+  }
 }
 
 function runSelector(display, backgroundDataUrl) {
@@ -192,6 +225,7 @@ function runSelector(display, backgroundDataUrl) {
     });
     selectorWin.setAlwaysOnTop(true, 'screen-saver');
     selectorWin.loadFile(path.join(__dirname, 'selector.html'));
+    hardenWindow(selectorWin);
 
     let settled = false;
     const finish = (rect) => {
@@ -199,10 +233,11 @@ function runSelector(display, backgroundDataUrl) {
       settled = true;
       ipcMain.removeHandler('selector:image');
       ipcMain.removeListener('selector:done', onDone);
-      if (selectorWin) {
+      if (selectorWin && !selectorWin.isDestroyed()) {
+        selectorWin.removeListener('closed', onClosed);
         selectorWin.close();
-        selectorWin = null;
       }
+      selectorWin = null;
       resolve(rect);
     };
 
@@ -210,34 +245,79 @@ function runSelector(display, backgroundDataUrl) {
     ipcMain.handle('selector:image', () => backgroundDataUrl);
     const onDone = (_evt, rect) => finish(rect);
     ipcMain.on('selector:done', onDone);
+    // Closing the selector (Alt+F4 / Esc) must still resolve the promise.
+    const onClosed = () => finish(null);
+    selectorWin.on('closed', onClosed);
   });
 }
 
 // --- IPC ---------------------------------------------------------------------
-ipcMain.handle('settings:get', () => loadSettings());
+const PROVIDER_NAMES = ['claude', 'openai', 'gemini'];
+
+// Return settings WITHOUT the raw keys: each provider gets a boolean hasKey and
+// an empty apiKey, so no renderer ever receives a secret.
+function maskedSettings(s) {
+  const m = JSON.parse(JSON.stringify(s));
+  for (const p of PROVIDER_NAMES) {
+    m[p].hasKey = !!s[p].apiKey;
+    m[p].apiKey = '';
+  }
+  return m;
+}
+
+ipcMain.handle('settings:get', () => maskedSettings(loadSettings()));
+
+// Overlay only needs a yes/no — never the key material.
+ipcMain.handle('app:connected', () => {
+  const s = loadSettings();
+  const cfg = s[s.provider] || {};
+  return { connected: !!cfg.apiKey, provider: s.provider };
+});
+
 ipcMain.handle('settings:set', (_e, next) => {
-  saveSettings(next);
-  return loadSettings();
+  const current = loadSettings();
+  const merged = { ...next };
+  // A blank key field means "unchanged" (the renderer never had the real key).
+  for (const p of PROVIDER_NAMES) {
+    if (merged[p] && !merged[p].apiKey) {
+      merged[p] = { ...merged[p], apiKey: current[p].apiKey };
+    }
+  }
+  const saved = saveSettings(merged);
+  if (next.captureHotkey && next.captureHotkey !== current.captureHotkey) {
+    registerCaptureHotkey(saved.captureHotkey);
+  }
+  return maskedSettings(saved);
 });
 
 ipcMain.handle('capture:start', () => captureRegion());
 
-ipcMain.handle('ai:ask', async (e, { text, imageDataUrl, history }) => {
+ipcMain.handle('ai:ask', async (e, { text, imageDataUrl, history, reqId }) => {
   const settings = loadSettings();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 90000);
   try {
     const onDelta = (chunk) => {
-      try { e.sender.send('ai:delta', chunk); } catch { /* window gone */ }
+      try { e.sender.send('ai:delta', { id: reqId, chunk }); } catch { /* window gone */ }
     };
-    const result = await askAI(settings, { text, imageDataUrl, history }, onDelta);
+    const result = await askAI(settings, { text, imageDataUrl, history, signal: controller.signal }, onDelta);
     return { ok: true, ...result };
   } catch (err) {
-    return { ok: false, error: err.message || String(err) };
+    const msg = controller.signal.aborted ? 'Request timed out (90s).' : (err.message || String(err));
+    return { ok: false, error: msg };
+  } finally {
+    clearTimeout(timer);
   }
 });
 
 ipcMain.handle('ai:test', async (_e, { provider, cfg }) => {
   try {
-    await testProvider(provider, cfg);
+    const c = { ...cfg };
+    // Fall back to the saved key/model when the field was left blank (masked).
+    const saved = loadSettings()[provider] || {};
+    if (!c.apiKey) c.apiKey = saved.apiKey || '';
+    if (!c.model) c.model = saved.model || '';
+    await testProvider(provider, c);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message || String(err) };
@@ -335,9 +415,7 @@ ipcMain.on('open-external', (_e, url) => {
 });
 
 ipcMain.on('overlay:open-settings', () => openSettings());
-ipcMain.on('overlay:toggle-clickthrough', (_e, enabled) => {
-  if (overlayWin) overlayWin.setIgnoreMouseEvents(enabled, { forward: true });
-});
+ipcMain.on('overlay:toggle-clickthrough', () => setClickThrough(!clickThrough));
 
 // Resize driven by the in-UI corner grip. Clamp to the window's minimums.
 ipcMain.on('overlay:resize', (_e, { w, h }) => {
@@ -345,27 +423,58 @@ ipcMain.on('overlay:resize', (_e, { w, h }) => {
   overlayWin.setSize(Math.max(280, Math.round(w)), Math.max(200, Math.round(h)));
 });
 
+// (Re)register the capture hotkey; returns false if the OS rejected it.
+let captureHotkeyAccel = null;
+function registerCaptureHotkey(accel) {
+  if (captureHotkeyAccel) {
+    try { globalShortcut.unregister(captureHotkeyAccel); } catch { /* ignore */ }
+    captureHotkeyAccel = null;
+  }
+  const target = accel || 'CommandOrControl+Shift+A';
+  let ok = false;
+  try {
+    ok = globalShortcut.register(target, async () => {
+      if (!overlayWin) return;
+      const img = await captureRegion();
+      if (img) overlayWin.webContents.send('capture:result', img);
+    });
+  } catch { ok = false; }
+  if (ok) captureHotkeyAccel = target;
+  if (!ok && overlayWin && !overlayWin.isDestroyed()) {
+    overlayWin.webContents.send('hotkey:failed', target);
+  }
+  return ok;
+}
+
 // --- Lifecycle ---------------------------------------------------------------
-app.whenReady().then(() => {
-  // A minimal menu with edit roles registers the Ctrl+C/V/X/A accelerators.
-  // The menu bar stays hidden on our windows; only the shortcuts are enabled.
-  Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'editMenu' }]));
-
-  createOverlay();
-  setupAutoUpdater();
-
-  const settings = loadSettings();
-  const hotkey = settings.captureHotkey || 'CommandOrControl+Shift+A';
-  globalShortcut.register(hotkey, async () => {
-    if (!overlayWin) return;
-    const img = await captureRegion();
-    if (img) overlayWin.webContents.send('capture:result', img);
+// Single-instance lock: a second launch just focuses the existing overlay.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (overlayWin && !overlayWin.isDestroyed()) {
+      if (overlayWin.isMinimized()) overlayWin.restore();
+      overlayWin.show();
+      overlayWin.focus();
+    }
   });
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createOverlay();
-  });
-});
+  app.whenReady().then(() => {
+    // A minimal menu with edit roles registers the Ctrl+C/V/X/A accelerators.
+    Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'editMenu' }]));
 
-app.on('will-quit', () => globalShortcut.unregisterAll());
-app.on('window-all-closed', () => app.quit());
+    createOverlay();
+    setupAutoUpdater();
+
+    registerCaptureHotkey(loadSettings().captureHotkey);
+    // Toggle click-through from anywhere, so it can never trap the user.
+    globalShortcut.register('CommandOrControl+Shift+X', () => setClickThrough(!clickThrough));
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createOverlay();
+    });
+  });
+
+  app.on('will-quit', () => globalShortcut.unregisterAll());
+  app.on('window-all-closed', () => app.quit());
+}

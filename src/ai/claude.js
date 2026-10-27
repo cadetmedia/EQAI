@@ -19,7 +19,7 @@ function buildMessages(history, currentContent) {
   return msgs;
 }
 
-async function ask(cfg, { text, imageDataUrl, systemPrompt, history }, onDelta) {
+async function ask(cfg, { text, imageDataUrl, systemPrompt, history, signal }, onDelta) {
   const content = [];
   if (imageDataUrl) {
     const img = splitDataUrl(imageDataUrl);
@@ -29,6 +29,7 @@ async function ask(cfg, { text, imageDataUrl, systemPrompt, history }, onDelta) 
 
   const res = await fetch(ENDPOINT, {
     method: 'POST',
+    signal,
     headers: {
       'content-type': 'application/json',
       'x-api-key': cfg.apiKey,
