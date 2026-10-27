@@ -12,6 +12,7 @@ const els = {
   eqlogdir: document.getElementById('eqlogdir'),
   usewiki: document.getElementById('usewiki'),
   sources: document.getElementById('sources'),
+  closesources: document.getElementById('closesources'),
   persona: document.getElementById('persona'),
   feedurl: document.getElementById('feedurl'),
   ver: document.getElementById('ver'),
@@ -50,6 +51,7 @@ function syncProviderBlocks() {
   els.eqlogdir.value = s.eqLogDir || '';
   els.usewiki.checked = s.useWiki !== false;
   els.sources.value = (s.trustedSources || []).join('\n');
+  els.closesources.value = (s.closeSources || []).join('\n');
   els.persona.value = s.personaPrompt || '';
   els.feedurl.value = s.updateFeedUrl || '';
   syncProviderBlocks();
@@ -122,14 +124,17 @@ document.getElementById('test').addEventListener('click', async () => {
 document.getElementById('save').addEventListener('click', async () => {
   // Keep an optional path (e.g. reddit.com/r/EQLegends); just strip the
   // protocol, any leading www., and a trailing slash.
-  const trustedSources = els.sources.value
+  const cleanSources = (v) => v
     .split('\n')
     .map((line) => line.trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, ''))
     .filter(Boolean);
+  const trustedSources = cleanSources(els.sources.value);
+  const closeSources = cleanSources(els.closesources.value);
   await window.api.saveSettings({
     provider: els.provider.value,
     captureHotkey: els.hotkey.value.trim(),
     trustedSources,
+    closeSources,
     personaPrompt: els.persona.value,
     eqLogDir: els.eqlogdir.value.trim(),
     useWiki: els.usewiki.checked,

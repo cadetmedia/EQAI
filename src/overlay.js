@@ -177,7 +177,10 @@ function finishAnswer(el, body, res) {
     banner.textContent = '⚠ No sources cited — this may be general knowledge, not verified for EverQuest Legends.';
   } else if (res.usedOutside) {
     banner.className = 'srcbanner warn';
-    banner.textContent = '⚠ Went OUTSIDE your trusted sources — see flagged links below.';
+    banner.textContent = '⚠ Used an OUTSIDE source (not EQ Legends, not a close classic-EQ source) — see flagged links below.';
+  } else if (res.usedClose) {
+    banner.className = 'srcbanner close';
+    banner.textContent = '≈ Includes a CLOSE classic-EQ source (e.g. Project 1999) — usually right, but Legends may differ on drops/spawns.';
   } else {
     banner.className = 'srcbanner ok';
     banner.textContent = '✓ Answered from your trusted EverQuest Legends sources.';
@@ -195,9 +198,10 @@ function finishAnswer(el, body, res) {
     for (const c of res.citations) {
       const row = document.createElement('div');
       row.className = 'source-row';
+      const tier = c.tier || (c.trusted ? 'trusted' : 'outside');
       const tag = document.createElement('span');
-      tag.className = 'tag ' + (c.trusted ? 'trusted' : 'outside');
-      tag.textContent = c.trusted ? 'trusted' : 'outside';
+      tag.className = 'tag ' + tier;
+      tag.textContent = tier;
       const link = document.createElement('a');
       link.href = '#'; // never a real navigable href
       link.className = 'source-link';

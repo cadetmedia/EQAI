@@ -180,9 +180,13 @@
     </label>
     <div class="hint">When your question refers to "here"/"this", EQAI fetches the matching eqlwiki page and feeds it to the AI for accuracy. Cached locally; turn off if it feels slow.</div>
 
-    <label for="sources">Trusted EverQuest Legends sources — one per line (domain, or domain/path)</label>
+    <label for="sources">🟢 Trusted — EverQuest Legends sources (one per line; domain or domain/path)</label>
     <textarea id="sources" placeholder="everquestlegends.com&#10;eqlwiki.com&#10;daybreakgames.com&#10;eqprogression.com&#10;reddit.com/r/EQLegends"></textarea>
-    <div class="hint">Answers citing these are tagged <b>trusted</b>. Anything else is flagged <b>outside</b>, and the app tells you where it looked. Add a path (e.g. <code>reddit.com/r/EQLegends</code>) to trust only that section of a site. EQAI always searches the web and treats every question as being about EverQuest Legends.</div>
+    <div class="hint">Legends-specific. Answers from these are tagged <b style="color:#8fd14f">trusted</b> and preferred first.</div>
+
+    <label for="closesources">🟡 Close — classic-EQ sources (used only if no Legends source has it)</label>
+    <textarea id="closesources" placeholder="wiki.project1999.com"></textarea>
+    <div class="hint">Classic EverQuest is usually right for Legends but <b>drops, spawn rates and timers may differ</b>, so these are tagged <b style="color:#e8d24a">close</b> (not trusted) and used only when no Legends source has the answer. Everything else is flagged <b style="color:#ff5c8a">outside</b>. EQAI always searches the web and treats every question as being about EverQuest Legends.</div>
 
     <label for="persona">Assistant style (optional)</label>
     <textarea id="persona" style="min-height:48px"></textarea>

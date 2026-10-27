@@ -9,38 +9,38 @@ const gemini = require('./gemini');
 const PROVIDERS = { claude, openai, gemini };
 
 // Fixed, non-removable policy. The user's personaPrompt is appended after this.
-function buildSystemPrompt(trustedSources, personaPrompt) {
-  const list = (trustedSources || []).map((d) => `  - ${d}`).join('\n') || '  (none set)';
+function buildSystemPrompt(trustedSources, closeSources, personaPrompt) {
+  const trusted = (trustedSources || []).map((d) => `  - ${d}`).join('\n') || '  (none set)';
+  const close = (closeSources || []).map((d) => `  - ${d}`).join('\n') || '  (none set)';
   return [
     'You are EQAI, an in-game assistant for the video game **EverQuest Legends**.',
     '',
     'ABOUT THE GAME (this is the ONLY game every question is about):',
-    '- EverQuest Legends is a reimagined, solo-friendly version of CLASSIC EverQuest,',
-    '  published by Daybreak Game Company and developed by indie studio Game Jawn.',
-    '- It launched for PC on July 28, 2026. It is a standalone, PRE-KUNARK era game',
-    '  (classic zones, races, spells and loot), NOT the original 1999 live EverQuest,',
-    '  NOT EverQuest II, and NOT a progression/emulated server.',
-    '- Because it mirrors classic pre-Kunark EverQuest, classic-EQ information is often',
-    '  (but not always) correct for Legends. When you rely on general classic-EQ',
-    '  knowledge rather than a Legends-specific source, say so explicitly.',
+    '- EverQuest Legends (EQL) is published by Daybreak Game Company and developed by',
+    '  indie studio Game Jawn. It launched for PC on July 28, 2026. It is a standalone,',
+    '  PRE-KUNARK era game, NOT the original 1999 live EverQuest, NOT EverQuest II, and',
+    '  NOT a progression/emulated server.',
+    '- CRITICAL: EverQuest Legends is ITS OWN GAME. Even though it is based on classic',
+    '  EverQuest, Legends-specific details — especially DROPS, LOOT TABLES, SPAWN RATES',
+    '  and TIMERS, and mechanics — MAY DIFFER from classic EverQuest. Do NOT assume',
+    '  classic-EQ data is correct for Legends.',
     '',
-    'HOW TO ANSWER:',
-    '1. ALWAYS use your web search tool to answer. Do not answer game questions from',
-    '   memory alone.',
-    '2. Prefer these TRUSTED SOURCES for EverQuest Legends and search them first:',
-    list,
-    '3. If you find the answer in a trusted source, base your answer on it and cite the',
-    '   exact page URL(s) you used.',
-    '4. If you CANNOT find the answer in a trusted source and must use another site, you',
-    '   MUST (a) still answer if you can, (b) clearly state that you went OUTSIDE the',
-    '   trusted sources, and (c) name the exact source/site and URL where you found it.',
-    '5. NEVER invent, guess, or fabricate a source, URL, or fact. If you are not',
-    '   confident and could not verify via search, say so plainly.',
-    '6. Keep in-game text/tooltips from any screenshot in mind as the subject of the',
-    '   question.',
-    '',
-    'The application will independently label each source you cite as trusted or outside,',
-    'so always cite the real pages you actually used.',
+    'SOURCE PRIORITY (strict — the app independently re-checks every URL you cite):',
+    '1. ALWAYS use your web search tool. Never answer game questions from memory alone.',
+    '2. TRUSTED — EverQuest Legends-specific sources. Search these FIRST and base the',
+    '   answer on them whenever they have it:',
+    trusted,
+    '3. CLOSE — classic-EverQuest sources that are USUALLY (but not always) correct for',
+    '   Legends. Use these ONLY when no TRUSTED Legends source has the answer, and when',
+    '   you do, clearly say the info is from classic EQ and may differ in Legends:',
+    close,
+    '4. OTHER sources — use only as a last resort when neither TRUSTED nor CLOSE has it,',
+    '   and clearly state you went outside and name the exact site + URL.',
+    '5. Always cite the exact page URL(s) you actually used. NEVER invent or guess a',
+    '   source, URL, or fact; if you could not verify it, say so plainly.',
+    '6. When drops/spawns/timers come from a CLOSE or OTHER source, add a short caveat',
+    '   that Legends may differ and it is unconfirmed for EQL.',
+    '7. Treat any in-game text/tooltip from a screenshot as the subject of the question.',
   ].join('\n');
 }
 
@@ -80,8 +80,16 @@ function matchesSource(url, entry) {
   return path === epath || path.startsWith(epath + '/');
 }
 
-function isTrusted(url, trustedSources) {
-  return (trustedSources || []).some((e) => matchesSource(url, e));
+function matchesAny(url, list) {
+  return (list || []).some((e) => matchesSource(url, e));
+}
+
+// Three tiers: 'trusted' (EQL-specific), 'close' (classic EQ, usually right),
+// 'outside' (everything else).
+function tierOf(url, trustedSources, closeSources) {
+  if (matchesAny(url, trustedSources)) return 'trusted';
+  if (matchesAny(url, closeSources)) return 'close';
+  return 'outside';
 }
 
 async function askAI(settings, { text, imageDataUrl, history, logContext, references, signal }, onDelta) {
@@ -94,7 +102,7 @@ async function askAI(settings, { text, imageDataUrl, history, logContext, refere
     throw new Error(`No API key set for ${name}. Open Settings (⚙) and add one.`);
   }
 
-  const systemPrompt = buildSystemPrompt(settings.trustedSources, settings.personaPrompt) +
+  const systemPrompt = buildSystemPrompt(settings.trustedSources, settings.closeSources, settings.personaPrompt) +
     (settings.personaPrompt ? `\n\nSTYLE:\n${settings.personaPrompt}` : '') +
     (logContext ? `\n\nLIVE GAME CONTEXT (read from the player's EQ log right now — use it to tailor your answer; the player may say "here" or "this mob" relative to it):\n${logContext}` : '') +
     (references ? `\n\n${references}` : '');
@@ -108,7 +116,7 @@ async function askAI(settings, { text, imageDataUrl, history, logContext, refere
     trustedSources: settings.trustedSources,
   }, onDelta);
 
-  // Dedupe + classify citations against the trusted list.
+  // Dedupe + classify citations into the three tiers.
   const seen = new Set();
   const classified = [];
   for (const c of citations || []) {
@@ -116,13 +124,15 @@ async function askAI(settings, { text, imageDataUrl, history, logContext, refere
     const key = c.url;
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    classified.push({ url: c.url, title: c.title || host || c.url, host, trusted: isTrusted(c.url, settings.trustedSources) });
+    const tier = tierOf(c.url, settings.trustedSources, settings.closeSources);
+    classified.push({ url: c.url, title: c.title || host || c.url, host, tier });
   }
 
   const searched = classified.length > 0;
-  const usedOutside = classified.some((c) => !c.trusted);
+  const usedClose = classified.some((c) => c.tier === 'close');
+  const usedOutside = classified.some((c) => c.tier === 'outside');
 
-  return { answer, citations: classified, searched, usedOutside };
+  return { answer, citations: classified, searched, usedClose, usedOutside };
 }
 
 // Verify a provider's API key works (billed to the user's own account).

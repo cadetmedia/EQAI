@@ -182,6 +182,7 @@ button.active {
   margin-bottom: 7px;
 }
 .srcbanner.ok { color: var(--green); background: rgba(143, 209, 79, 0.12); border: 1px solid rgba(143,209,79,0.35); }
+.srcbanner.close { color: var(--yellow); background: rgba(232, 210, 74, 0.12); border: 1px solid rgba(232,210,74,0.35); }
 .srcbanner.warn { color: var(--pink); background: rgba(255, 92, 138, 0.12); border: 1px solid rgba(255,92,138,0.35); }
 .answer { white-space: pre-wrap; }
 /* Rendered markdown inside answers */
@@ -224,6 +225,7 @@ button.active {
   padding: 1px 5px; border-radius: 3px;
 }
 .tag.trusted { color: #0b1a0d; background: var(--green); }
+.tag.close { color: #2a2600; background: var(--yellow); }
 .tag.outside { color: #2a0a14; background: var(--pink); }
 .source-link {
   font-size: 11px;

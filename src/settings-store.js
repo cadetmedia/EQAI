@@ -28,6 +28,11 @@ const DEFAULTS = {
     'eqprogression.com',
     'reddit.com/r/EQLegends',
   ],
+  // Classic-EQ sources that are usually (not always) correct for Legends. Used
+  // only when no trusted EQL source has the answer; flagged "close", not trusted.
+  closeSources: [
+    'wiki.project1999.com',
+  ],
   personaPrompt:
     'Be concise and practical, like a helpful high-level EverQuest player ' +
     'giving another player a straight answer.',
@@ -75,6 +80,7 @@ function loadSettings() {
     openai: { ...DEFAULTS.openai, ...(raw.openai || {}) },
     gemini: { ...DEFAULTS.gemini, ...(raw.gemini || {}) },
     trustedSources: Array.isArray(raw.trustedSources) ? raw.trustedSources : DEFAULTS.trustedSources,
+    closeSources: Array.isArray(raw.closeSources) ? raw.closeSources : DEFAULTS.closeSources,
   };
   for (const p of KEY_FIELDS) merged[p].apiKey = decKey(merged[p].apiKey);
   return merged;
