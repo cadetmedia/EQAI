@@ -167,6 +167,13 @@
     <label for="hotkey">Capture hotkey (restart app to apply)</label>
     <input id="hotkey" type="text" placeholder="CommandOrControl+Shift+A" />
 
+    <label for="eqlogdir">EverQuest log folder (for live in-game context)</label>
+    <div class="row" style="gap:6px">
+      <input id="eqlogdir" type="text" placeholder="auto-detect — or Browse to your EQ \Logs folder" />
+      <button id="browse-log" class="ghost" style="flex:none">Browse…</button>
+    </div>
+    <div class="hint">Turn on logging in-game with <code>/log on</code>. EQAI reads the log (no injection/memory) to know your zone, character and recent kills/loot, and feeds that to the AI so you can ask "what camps <b>here</b>?". Leave blank to auto-detect.</div>
+
     <label for="sources">Trusted EverQuest Legends sources — one per line (domain, or domain/path)</label>
     <textarea id="sources" placeholder="everquestlegends.com&#10;eqlwiki.com&#10;daybreakgames.com&#10;eqprogression.com&#10;reddit.com/r/EQLegends"></textarea>
     <div class="hint">Answers citing these are tagged <b>trusted</b>. Anything else is flagged <b>outside</b>, and the app tells you where it looked. Add a path (e.g. <code>reddit.com/r/EQLegends</code>) to trust only that section of a site. EQAI always searches the web and treats every question as being about EverQuest Legends.</div>

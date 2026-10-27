@@ -16,6 +16,8 @@ const DEFAULTS = {
   openai: { apiKey: '', model: 'gpt-4o' },
   gemini: { apiKey: '', model: 'gemini-2.0-flash' },
   windowBounds: null,
+  // EQ log folder (requires /log on in-game). '' = try to auto-discover.
+  eqLogDir: '',
   updateFeedUrl: 'https://github.com/cadetmedia/EQAI/releases/latest/download/latest.json',
   trustedSources: [
     'everquestlegends.com',

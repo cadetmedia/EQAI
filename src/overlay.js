@@ -228,6 +228,19 @@ window.api.onAiDelta(({ id, chunk }) => {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 });
 
+// Live EQ-log context strip (zone / character), updated as the log changes.
+const logbar = document.getElementById('logbar');
+function renderLog(c) {
+  if (!c || !c.connected) { logbar.classList.add('hidden'); return; }
+  const bits = [];
+  if (c.zone) bits.push(`📍 ${c.zone}`);
+  if (c.character) bits.push(`🧙 ${c.character}${c.level ? ` · L${c.level}` : ''}`);
+  logbar.textContent = bits.length ? bits.join('    ') : '📜 Log connected';
+  logbar.classList.remove('hidden');
+}
+window.api.onLogContext(renderLog);
+window.api.getLogContext().then(renderLog).catch(() => {});
+
 // Surface a failed hotkey registration instead of silently ignoring it.
 window.api.onHotkeyFailed((accel) => {
   addMessage('error', `⚠ Couldn't register the capture hotkey "${accel}" — it may be in use by another app. Pick a different one in ⚙ Settings.`);

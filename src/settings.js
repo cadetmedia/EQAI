@@ -9,6 +9,7 @@ const els = {
   geminiKey: document.getElementById('gemini-key'),
   geminiModel: document.getElementById('gemini-model'),
   hotkey: document.getElementById('hotkey'),
+  eqlogdir: document.getElementById('eqlogdir'),
   sources: document.getElementById('sources'),
   persona: document.getElementById('persona'),
   feedurl: document.getElementById('feedurl'),
@@ -45,6 +46,7 @@ function syncProviderBlocks() {
   markKey(els.geminiKey, s.gemini.hasKey);
   els.geminiModel.value = s.gemini.model || '';
   els.hotkey.value = s.captureHotkey || '';
+  els.eqlogdir.value = s.eqLogDir || '';
   els.sources.value = (s.trustedSources || []).join('\n');
   els.persona.value = s.personaPrompt || '';
   els.feedurl.value = s.updateFeedUrl || '';
@@ -81,6 +83,12 @@ document.getElementById('check').addEventListener('click', async () => {
 });
 
 els.provider.addEventListener('change', syncProviderBlocks);
+
+// Browse for the EQ log folder.
+document.getElementById('browse-log').addEventListener('click', async () => {
+  const dir = await window.api.pickFolder();
+  if (dir) els.eqlogdir.value = dir;
+});
 
 // "Get an API key" links open in the real browser.
 for (const a of document.querySelectorAll('a.getkey')) {
@@ -121,6 +129,7 @@ document.getElementById('save').addEventListener('click', async () => {
     captureHotkey: els.hotkey.value.trim(),
     trustedSources,
     personaPrompt: els.persona.value,
+    eqLogDir: els.eqlogdir.value.trim(),
     updateFeedUrl: els.feedurl.value.trim(),
     claude: { apiKey: els.claudeKey.value.trim(), model: els.claudeModel.value.trim() },
     openai: { apiKey: els.openaiKey.value.trim(), model: els.openaiModel.value.trim() },

@@ -11,6 +11,7 @@ const {
   nativeImage,
   shell,
   Menu,
+  dialog,
 } = require('electron');
 const path = require('path');
 
@@ -59,9 +60,18 @@ function setClickThrough(on) {
 
 let capturing = false; // guards against re-entrant captures
 
+// Start/refresh the EQ log reader from settings (auto-discovers when unset).
+function startLogReader() {
+  const dir = loadSettings().eqLogDir || logReader.autodiscoverDir();
+  logReader.start(dir, (c) => {
+    if (overlayWin && !overlayWin.isDestroyed()) overlayWin.webContents.send('log:context', c);
+  });
+}
+
 const { loadSettings, saveSettings } = require('./settings-store');
 const { askAI, testProvider } = require('./ai');
 const { friendlyLabel, compareVersions } = require('./version');
+const logReader = require('./log-reader');
 const { autoUpdater } = require('electron-updater');
 
 // Silent auto-update only applies to the INSTALLED build. The portable exe can't
@@ -287,7 +297,17 @@ ipcMain.handle('settings:set', (_e, next) => {
   if (next.captureHotkey && next.captureHotkey !== current.captureHotkey) {
     registerCaptureHotkey(saved.captureHotkey);
   }
+  if (next.eqLogDir !== undefined && next.eqLogDir !== current.eqLogDir) {
+    startLogReader();
+  }
   return maskedSettings(saved);
+});
+
+ipcMain.handle('log:get', () => logReader.getContext());
+
+ipcMain.handle('dialog:pick-folder', async () => {
+  const res = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+  return res.canceled || !res.filePaths.length ? null : res.filePaths[0];
 });
 
 ipcMain.handle('capture:start', () => captureRegion());
@@ -300,7 +320,8 @@ ipcMain.handle('ai:ask', async (e, { text, imageDataUrl, history, reqId }) => {
     const onDelta = (chunk) => {
       try { e.sender.send('ai:delta', { id: reqId, chunk }); } catch { /* window gone */ }
     };
-    const result = await askAI(settings, { text, imageDataUrl, history, signal: controller.signal }, onDelta);
+    const logContext = logReader.getContext().summary;
+    const result = await askAI(settings, { text, imageDataUrl, history, logContext, signal: controller.signal }, onDelta);
     return { ok: true, ...result };
   } catch (err) {
     const msg = controller.signal.aborted ? 'Request timed out (90s).' : (err.message || String(err));
@@ -465,6 +486,7 @@ if (!app.requestSingleInstanceLock()) {
 
     createOverlay();
     setupAutoUpdater();
+    startLogReader();
 
     registerCaptureHotkey(loadSettings().captureHotkey);
     // Toggle click-through from anywhere, so it can never trap the user.
@@ -475,6 +497,6 @@ if (!app.requestSingleInstanceLock()) {
     });
   });
 
-  app.on('will-quit', () => globalShortcut.unregisterAll());
+  app.on('will-quit', () => { globalShortcut.unregisterAll(); logReader.stop(); });
   app.on('window-all-closed', () => app.quit());
 }

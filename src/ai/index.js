@@ -84,7 +84,7 @@ function isTrusted(url, trustedSources) {
   return (trustedSources || []).some((e) => matchesSource(url, e));
 }
 
-async function askAI(settings, { text, imageDataUrl, history, signal }, onDelta) {
+async function askAI(settings, { text, imageDataUrl, history, logContext, signal }, onDelta) {
   const name = settings.provider || 'claude';
   const provider = PROVIDERS[name];
   if (!provider) throw new Error(`Unknown AI provider: ${name}`);
@@ -95,7 +95,8 @@ async function askAI(settings, { text, imageDataUrl, history, signal }, onDelta)
   }
 
   const systemPrompt = buildSystemPrompt(settings.trustedSources, settings.personaPrompt) +
-    (settings.personaPrompt ? `\n\nSTYLE:\n${settings.personaPrompt}` : '');
+    (settings.personaPrompt ? `\n\nSTYLE:\n${settings.personaPrompt}` : '') +
+    (logContext ? `\n\nLIVE GAME CONTEXT (read from the player's EQ log right now — use it to tailor your answer; the player may say "here" or "this mob" relative to it):\n${logContext}` : '');
 
   const { answer, citations } = await provider.ask(cfg, {
     text,

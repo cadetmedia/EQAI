@@ -21,6 +21,9 @@ contextBridge.exposeInMainWorld('api', {
   openExternal: (url) => ipcRenderer.send('open-external', url),
   getVersion: () => ipcRenderer.invoke('app:version'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
+  getLogContext: () => ipcRenderer.invoke('log:get'),
+  onLogContext: (cb) => ipcRenderer.on('log:context', (_e, c) => cb(c)),
+  pickFolder: () => ipcRenderer.invoke('dialog:pick-folder'),
   installUpdate: () => ipcRenderer.send('update:install'),
   onUpdateEvent: (cb) => ipcRenderer.on('update:event', (_e, ev) => cb(ev)),
 
