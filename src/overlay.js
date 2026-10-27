@@ -32,6 +32,57 @@ function addMessage(role, text, imageDataUrl) {
   return el;
 }
 
+// --- Minimal, safe markdown -> HTML (escapes first, then adds our own tags) ---
+function escapeHtml(s) {
+  return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+}
+function inlineMd(s) {
+  s = s.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`);
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, t, u) => `<a href="#" data-url="${u}">${t}</a>`);
+  s = s.replace(/(^|[\s(])(https?:\/\/[^\s)<]+)/g, (_m, pre, u) => `${pre}<a href="#" data-url="${u}">${u}</a>`);
+  return s;
+}
+function renderMarkdown(text) {
+  const lines = escapeHtml(text || '').split('\n');
+  let html = '';
+  let inUl = false;
+  let inOl = false;
+  let inCode = false;
+  let codeBuf = [];
+  const closeLists = () => {
+    if (inUl) { html += '</ul>'; inUl = false; }
+    if (inOl) { html += '</ol>'; inOl = false; }
+  };
+  for (const line of lines) {
+    if (/^```/.test(line.trim())) {
+      if (inCode) { html += `<pre><code>${codeBuf.join('\n')}</code></pre>`; codeBuf = []; inCode = false; }
+      else { closeLists(); inCode = true; }
+      continue;
+    }
+    if (inCode) { codeBuf.push(line); continue; }
+    const h = line.match(/^(#{1,3})\s+(.*)$/);
+    if (h) { closeLists(); html += `<div class="md-h">${inlineMd(h[2])}</div>`; continue; }
+    const ul = line.match(/^\s*[-*]\s+(.*)$/);
+    if (ul) { if (!inUl) { closeLists(); html += '<ul>'; inUl = true; } html += `<li>${inlineMd(ul[1])}</li>`; continue; }
+    const ol = line.match(/^\s*\d+\.\s+(.*)$/);
+    if (ol) { if (!inOl) { closeLists(); html += '<ol>'; inOl = true; } html += `<li>${inlineMd(ol[1])}</li>`; continue; }
+    if (line.trim() === '') { closeLists(); html += '<div class="md-gap"></div>'; continue; }
+    closeLists();
+    html += `<div>${inlineMd(line)}</div>`;
+  }
+  if (inCode) html += `<pre><code>${codeBuf.join('\n')}</code></pre>`;
+  closeLists();
+  return html;
+}
+
+// Cited/markdown links open in the real browser.
+messagesEl.addEventListener('click', (e) => {
+  const a = e.target.closest('a[data-url]');
+  if (a) { e.preventDefault(); window.api.openExternal(a.dataset.url); }
+});
+
 function setPendingImage(dataUrl) {
   pendingImage = dataUrl;
   if (dataUrl) {
@@ -90,8 +141,9 @@ async function send(presetText) {
 
 // Finalize a streamed answer: authoritative text, source-trust banner, citations.
 function finishAnswer(el, body, res) {
-  // Prefer the authoritative final text; otherwise keep what streamed in.
-  if (res.answer) body.textContent = res.answer;
+  // Prefer the authoritative final text (rendered as markdown); otherwise keep
+  // whatever streamed in as plain text.
+  if (res.answer) body.innerHTML = renderMarkdown(res.answer);
   else if (body.dataset.started !== '1') body.textContent = '(empty response)';
 
   const banner = document.createElement('div');
@@ -137,6 +189,19 @@ function finishAnswer(el, body, res) {
     el.appendChild(srcWrap);
   }
 
+  // Copy-answer button.
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'copy-btn';
+  copyBtn.textContent = '⧉ Copy';
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(res.answer || '');
+      copyBtn.textContent = '✓ Copied';
+      setTimeout(() => { copyBtn.textContent = '⧉ Copy'; }, 1500);
+    } catch { /* ignore */ }
+  });
+  el.appendChild(copyBtn);
+
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
@@ -161,7 +226,7 @@ async function capture() {
 }
 
 // --- Wiring ------------------------------------------------------------------
-document.getElementById('btn-send').addEventListener('click', send);
+document.getElementById('btn-send').addEventListener('click', () => send());
 document.getElementById('btn-capture').addEventListener('click', capture);
 document.getElementById('btn-settings').addEventListener('click', () => window.api.openSettings());
 document.getElementById('btn-clear').addEventListener('click', () => {

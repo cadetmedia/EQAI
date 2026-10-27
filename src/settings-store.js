@@ -23,6 +23,8 @@ const DEFAULTS = {
     apiKey: '',
     model: 'gemini-2.0-flash',
   },
+  // Remembered overlay window position/size ({x,y,width,height} or null).
+  windowBounds: null,
   // Where the app checks for a newer release. Should return JSON like:
   //   { "version": "1.0.0-alpha.1", "label": "Alpha 1.1",
   //     "url": "https://.../EQAI-portable-1.0.0-alpha.1.exe", "notes": "..." }

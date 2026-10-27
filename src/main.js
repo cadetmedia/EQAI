@@ -46,8 +46,35 @@ let overlayWin = null;
 let settingsWin = null;
 let selectorWin = null;
 
+// Use remembered bounds only if they still fall on a visible display.
+function savedOverlayBounds() {
+  const b = loadSettings().windowBounds;
+  if (!b || typeof b.width !== 'number' || typeof b.height !== 'number') return null;
+  const onScreen = screen.getAllDisplays().some((d) => {
+    const w = d.workArea;
+    return b.x + 40 >= w.x && b.y + 20 >= w.y &&
+      b.x + 40 <= w.x + w.width && b.y + 20 <= w.y + w.height;
+  });
+  return {
+    width: Math.max(280, b.width),
+    height: Math.max(200, b.height),
+    ...(onScreen && typeof b.x === 'number' ? { x: b.x, y: b.y } : {}),
+  };
+}
+
+let saveBoundsTimer = null;
+function persistOverlayBounds() {
+  clearTimeout(saveBoundsTimer);
+  saveBoundsTimer = setTimeout(() => {
+    if (overlayWin && !overlayWin.isDestroyed()) {
+      saveSettings({ windowBounds: overlayWin.getBounds() });
+    }
+  }, 500);
+}
+
 // --- Overlay window ----------------------------------------------------------
 function createOverlay() {
+  const saved = savedOverlayBounds();
   overlayWin = new BrowserWindow({
     width: 420,
     height: 560,
@@ -55,6 +82,7 @@ function createOverlay() {
     minHeight: 200,
     x: 40,
     y: 40,
+    ...saved, // remembered size/position, when valid
     frame: false, // no title bar; we draw our own
     transparent: true, // let the rounded corners / translucency show through
     resizable: true, // drag any edge to resize
@@ -71,6 +99,10 @@ function createOverlay() {
   overlayWin.setAlwaysOnTop(true, 'screen-saver');
   overlayWin.loadFile(path.join(__dirname, 'overlay.html'));
   enableClipboard(overlayWin);
+
+  // Remember where the user puts it / sizes it.
+  overlayWin.on('moved', persistOverlayBounds);
+  overlayWin.on('resize', persistOverlayBounds);
 }
 
 // --- Settings window ---------------------------------------------------------
@@ -82,7 +114,7 @@ function openSettings() {
   settingsWin = new BrowserWindow({
     width: 460,
     height: 520,
-    title: 'EQ AI Overlay — Settings',
+    title: 'EQAI — Settings',
     resizable: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
