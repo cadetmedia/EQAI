@@ -102,13 +102,17 @@ for (const a of document.querySelectorAll('a.getkey')) {
   });
 }
 
+// API keys never contain whitespace — strip any that sneaks in on paste
+// (stray space, trailing newline, wrapped copy) so it can't cause a 401.
+const cleanKey = (v) => String(v || '').replace(/\s+/g, '');
+
 // Test connection using whatever is currently typed (no need to save first).
 document.getElementById('test').addEventListener('click', async () => {
   const provider = els.provider.value;
   const cfgByProvider = {
-    claude: { apiKey: els.claudeKey.value.trim(), model: els.claudeModel.value.trim() },
-    openai: { apiKey: els.openaiKey.value.trim(), model: els.openaiModel.value.trim() },
-    gemini: { apiKey: els.geminiKey.value.trim(), model: els.geminiModel.value.trim() },
+    claude: { apiKey: cleanKey(els.claudeKey.value), model: els.claudeModel.value.trim() },
+    openai: { apiKey: cleanKey(els.openaiKey.value), model: els.openaiModel.value.trim() },
+    gemini: { apiKey: cleanKey(els.geminiKey.value), model: els.geminiModel.value.trim() },
   };
   const cfg = cfgByProvider[provider];
   if (!cfg.apiKey) {
@@ -139,9 +143,9 @@ document.getElementById('save').addEventListener('click', async () => {
     eqLogDir: els.eqlogdir.value.trim(),
     useWiki: els.usewiki.checked,
     updateFeedUrl: els.feedurl.value.trim(),
-    claude: { apiKey: els.claudeKey.value.trim(), model: els.claudeModel.value.trim() },
-    openai: { apiKey: els.openaiKey.value.trim(), model: els.openaiModel.value.trim() },
-    gemini: { apiKey: els.geminiKey.value.trim(), model: els.geminiModel.value.trim() },
+    claude: { apiKey: cleanKey(els.claudeKey.value), model: els.claudeModel.value.trim() },
+    openai: { apiKey: cleanKey(els.openaiKey.value), model: els.openaiModel.value.trim() },
+    gemini: { apiKey: cleanKey(els.geminiKey.value), model: els.geminiModel.value.trim() },
   });
   els.status.textContent = 'Saved ✓';
   setTimeout(() => (els.status.textContent = ''), 2000);

@@ -88,7 +88,11 @@ function loadSettings() {
 
 function saveSettings(next) {
   const merged = { ...loadSettings(), ...next };
-  for (const p of KEY_FIELDS) merged[p] = { ...(merged[p] || DEFAULTS[p]) };
+  for (const p of KEY_FIELDS) {
+    merged[p] = { ...(merged[p] || DEFAULTS[p]) };
+    // Keys never contain whitespace — strip any that slipped in on paste.
+    if (typeof merged[p].apiKey === 'string') merged[p].apiKey = merged[p].apiKey.replace(/\s+/g, '');
+  }
 
   // Encrypt key fields only for the on-disk copy.
   const onDisk = { ...merged };
