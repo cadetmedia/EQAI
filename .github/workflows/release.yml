@@ -1,0 +1,45 @@
+name: Release
+
+# Cut a release by pushing a tag like v1.0.0-alpha.1 (match package.json version).
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows packages
+        run: npm run dist
+
+      - name: Generate update feed (latest.json)
+        run: node scripts/make-latest.js
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_NOTES: ${{ github.event.head_commit.message }}
+
+      - name: Publish GitHub Release
+        shell: bash
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            dist/*.exe dist/latest.json \
+            --title "EQAI ${GITHUB_REF_NAME}" \
+            --notes "${RELEASE_NOTES:-Release ${GITHUB_REF_NAME}}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: ${{ github.event.head_commit.message }}

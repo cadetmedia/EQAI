@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <!-- Dark stone backdrop -->
+    <radialGradient id="stone" cx="50%" cy="38%" r="75%">
+      <stop offset="0%" stop-color="#23242f"/>
+      <stop offset="55%" stop-color="#14151d"/>
+      <stop offset="100%" stop-color="#07080c"/>
+    </radialGradient>
+    <!-- Ornate gold frame -->
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6e4a6"/>
+      <stop offset="22%" stop-color="#d9b65a"/>
+      <stop offset="55%" stop-color="#9c7a30"/>
+      <stop offset="100%" stop-color="#6a4e1c"/>
+    </linearGradient>
+    <linearGradient id="goldInner" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6a4e1c"/>
+      <stop offset="100%" stop-color="#caa14a"/>
+    </linearGradient>
+    <!-- Glowing crystal -->
+    <linearGradient id="gem" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#d6f4ff"/>
+      <stop offset="35%" stop-color="#67cdfa"/>
+      <stop offset="70%" stop-color="#2f8fd6"/>
+      <stop offset="100%" stop-color="#10406f"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7fdcff" stop-opacity="0.95"/>
+      <stop offset="45%" stop-color="#2f8fd6" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#2f8fd6" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.4"/>
+    </filter>
+  </defs>
+
+  <!-- rounded panel -->
+  <rect x="8" y="8" width="240" height="240" rx="42" fill="url(#stone)" stroke="#000" stroke-width="2"/>
+
+  <!-- outer gold ring (medallion) -->
+  <circle cx="128" cy="128" r="94" fill="none" stroke="url(#gold)" stroke-width="13"/>
+  <circle cx="128" cy="128" r="94" fill="none" stroke="#000" stroke-width="1" opacity="0.5"/>
+  <circle cx="128" cy="128" r="83" fill="none" stroke="url(#goldInner)" stroke-width="3" opacity="0.8"/>
+
+  <!-- runic ticks around the ring -->
+  <g stroke="#f1dd9e" stroke-width="3" stroke-linecap="round" opacity="0.85">
+    <line x1="128" y1="24" x2="128" y2="34"/>
+    <line x1="128" y1="222" x2="128" y2="232"/>
+    <line x1="24" y1="128" x2="34" y2="128"/>
+    <line x1="222" y1="128" x2="232" y2="128"/>
+    <line x1="54" y1="54" x2="61" y2="61"/>
+    <line x1="202" y1="54" x2="195" y2="61"/>
+    <line x1="54" y1="202" x2="61" y2="195"/>
+    <line x1="202" y1="202" x2="195" y2="195"/>
+  </g>
+
+  <!-- dark well behind the gem -->
+  <circle cx="128" cy="128" r="76" fill="#0a0c12"/>
+
+  <!-- glow halo -->
+  <circle cx="128" cy="132" r="64" fill="url(#glow)"/>
+
+  <!-- faceted crystal (diamond cut) -->
+  <g filter="url(#soft)" opacity="0.35">
+    <polygon points="128,58 174,118 128,198 82,118" fill="#2f8fd6"/>
+  </g>
+  <polygon points="128,60 170,116 128,196 86,116" fill="url(#gem)" stroke="#dff4ff" stroke-width="1.5"/>
+  <!-- facet lines -->
+  <g stroke="#dff4ff" stroke-width="1.4" opacity="0.65" fill="none">
+    <line x1="128" y1="60" x2="128" y2="196"/>
+    <line x1="86" y1="116" x2="170" y2="116"/>
+    <polyline points="104,88 128,116 152,88"/>
+    <polyline points="104,150 128,116 152,150"/>
+  </g>
+  <!-- top highlight -->
+  <polygon points="128,60 150,90 128,116 108,90" fill="#eafaff" opacity="0.55"/>
+</svg>

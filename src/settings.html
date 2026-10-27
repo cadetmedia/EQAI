@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline';" />
+    <title>EQAI — Settings</title>
+    <style>
+      :root {
+        --gold: #e8c16a; --gold-dim: #b78f3c; --gold-deep: #6a4e1c;
+        --amber: #e6d6ad; --amber-dim: #a9986c;
+      }
+      body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        color: var(--amber); margin: 0; padding: 18px 20px;
+        background:
+          radial-gradient(120% 70% at 50% 0%, rgba(103,205,250,0.05), transparent 60%),
+          linear-gradient(180deg, #1b1d27, #0a0b11);
+      }
+      h1 {
+        font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+        font-size: 18px; letter-spacing: 1.5px; color: var(--gold);
+        text-shadow: 0 1px 0 #000, 0 0 10px rgba(232,193,106,0.3);
+        margin: 0 0 14px; border-bottom: 1px solid var(--gold-deep); padding-bottom: 8px;
+      }
+      label { display: block; font-size: 12px; color: var(--amber-dim); margin: 12px 0 4px; }
+      input, select, textarea {
+        width: 100%; font: inherit; font-size: 13px; color: var(--amber);
+        background: rgba(0,0,0,0.4); border: 1px solid #000;
+        box-shadow: inset 0 0 0 1px var(--gold-deep);
+        border-radius: 6px; padding: 7px 9px; box-sizing: border-box;
+      }
+      input:focus, select:focus, textarea:focus { outline: none; box-shadow: inset 0 0 0 1px var(--gold-dim); }
+      textarea { resize: vertical; min-height: 64px; }
+      .row { display: flex; gap: 10px; }
+      .row > div { flex: 1; }
+      .provider-block { border: 1px solid #000; box-shadow: inset 0 0 0 1px var(--gold-deep); border-radius: 8px; padding: 10px 12px; margin-top: 8px; background: rgba(0,0,0,0.2); }
+      .hidden { display: none; }
+      footer { margin-top: 18px; display: flex; justify-content: space-between; align-items: center; }
+      #status { font-size: 12px; color: #7fd18b; }
+      button {
+        font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+        font-weight: 700; letter-spacing: 0.5px; color: #120d02;
+        background: linear-gradient(180deg, #f3d989, var(--gold-dim));
+        border: 1px solid #000; box-shadow: inset 0 0 0 1px #fff3cf, inset 0 1px 0 #fff;
+        border-radius: 7px; padding: 8px 18px; cursor: pointer;
+      }
+      button:hover { background: linear-gradient(180deg, #ffe49a, #c99b42); }
+      button.ghost {
+        color: var(--gold); background: transparent;
+        box-shadow: inset 0 0 0 1px var(--gold-deep);
+        text-shadow: none;
+      }
+      button.ghost:hover { background: rgba(232,193,106,0.1); }
+      .hint { font-size: 11px; color: var(--amber-dim); margin-top: 4px; }
+      .hint a, a.getkey { color: var(--gem); text-decoration: none; }
+      .hint a:hover, a.getkey:hover { text-decoration: underline; }
+      a.getkey { font-size: 12px; display: inline-block; margin-top: 6px; font-weight: 600; }
+      .note {
+        font-size: 12px; color: var(--amber); line-height: 1.5;
+        background: rgba(103,205,250,0.07); border: 1px solid rgba(103,205,250,0.25);
+        border-radius: 6px; padding: 8px 10px; margin: 2px 0 12px;
+      }
+      details.howto { margin-top: 8px; }
+      details.howto summary {
+        cursor: pointer; font-size: 12px; font-weight: 600; color: var(--gold);
+        list-style: none; user-select: none;
+      }
+      details.howto summary::-webkit-details-marker { display: none; }
+      details.howto summary::before { content: '▸ '; color: var(--gold-dim); }
+      details.howto[open] summary::before { content: '▾ '; }
+      details.howto ol { margin: 8px 0 2px; padding-left: 20px; font-size: 12px; color: var(--amber); line-height: 1.6; }
+      details.howto li { margin: 2px 0; }
+      .free-badge {
+        font-size: 10px; font-weight: 700; color: #0b1a0d; background: #7fcf8a;
+        border-radius: 3px; padding: 1px 5px; margin-left: 6px; vertical-align: middle;
+      }
+      .ver-line {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        font-size: 12px; color: var(--amber); margin: 0 0 12px;
+      }
+      .ver-line button { padding: 5px 12px; font-size: 12px; }
+      .upd-status { font-size: 12px; }
+      .upd-status a { color: var(--gem); text-decoration: none; font-weight: 600; }
+      .upd-status a:hover { text-decoration: underline; }
+    </style>
+  </head>
+  <body>
+    <h1>⬥ EQAI Settings</h1>
+
+    <div class="note">🔑 <b>Connect your own AI account.</b> Your key is stored only on this computer
+    and every request is billed to <b>your</b> account — nobody else pays for your usage.
+    <b>New to this? Choose Google Gemini</b> — it's free and only needs a Google login. Each
+    provider below has a step-by-step “How do I get a key?” guide.</div>
+
+    <div class="ver-line">
+      <span>Version: <b id="ver">…</b></span>
+      <button id="check" class="ghost">Check for updates</button>
+      <span id="upd-status" class="upd-status"></span>
+    </div>
+
+    <label for="provider">AI provider</label>
+    <select id="provider">
+      <option value="gemini">Google Gemini — has a free tier</option>
+      <option value="claude">Claude (Anthropic)</option>
+      <option value="openai">OpenAI</option>
+    </select>
+
+    <div id="block-gemini" class="provider-block">
+      <label for="gemini-key">Google Gemini API key <span class="free-badge">FREE TIER</span></label>
+      <input id="gemini-key" type="password" placeholder="AIza..." />
+      <a class="getkey" data-link="https://aistudio.google.com/apikey" href="#">Get a free Gemini key →</a>
+      <label for="gemini-model">Model</label>
+      <input id="gemini-model" type="text" placeholder="gemini-2.0-flash" />
+      <details class="howto">
+        <summary>How do I get a free key? (takes ~1 minute)</summary>
+        <ol>
+          <li>Click “Get a free Gemini key →” above — it opens Google AI Studio.</li>
+          <li>Sign in with your normal Google account.</li>
+          <li>Click <b>Create API key</b>. No credit card is needed for the free tier.</li>
+          <li>Copy the key, paste it in the box above.</li>
+          <li>Click <b>Test connection</b> below — you should see “✓ Account connected”.</li>
+        </ol>
+      </details>
+    </div>
+
+    <div id="block-claude" class="provider-block hidden">
+      <label for="claude-key">Anthropic API key</label>
+      <input id="claude-key" type="password" placeholder="sk-ant-..." />
+      <a class="getkey" data-link="https://console.anthropic.com/settings/keys" href="#">Get an Anthropic API key →</a>
+      <label for="claude-model">Model</label>
+      <input id="claude-model" type="text" placeholder="claude-sonnet-4-5" />
+      <details class="howto">
+        <summary>How do I set up an Anthropic key?</summary>
+        <ol>
+          <li>Click “Get an Anthropic API key →” above (opens console.anthropic.com).</li>
+          <li>Sign up or log in.</li>
+          <li>Go to <b>Billing</b> and add a small amount of credit (e.g. $5).</li>
+          <li>Open <b>API Keys → Create Key</b>, then copy it.</li>
+          <li>Paste it above and click <b>Test connection</b>. (Web search must be enabled on your account.)</li>
+        </ol>
+      </details>
+    </div>
+
+    <div id="block-openai" class="provider-block hidden">
+      <label for="openai-key">OpenAI API key</label>
+      <input id="openai-key" type="password" placeholder="sk-..." />
+      <a class="getkey" data-link="https://platform.openai.com/api-keys" href="#">Get an OpenAI API key →</a>
+      <label for="openai-model">Model</label>
+      <input id="openai-model" type="text" placeholder="gpt-4o" />
+      <details class="howto">
+        <summary>How do I set up an OpenAI key?</summary>
+        <ol>
+          <li>Click “Get an OpenAI API key →” above (opens platform.openai.com).</li>
+          <li>Sign up or log in.</li>
+          <li>Under <b>Billing</b>, add a payment method / a few dollars of credit.</li>
+          <li>Click <b>Create new secret key</b>, then copy it.</li>
+          <li>Paste it above and click <b>Test connection</b>.</li>
+        </ol>
+      </details>
+    </div>
+
+    <label for="hotkey">Capture hotkey (restart app to apply)</label>
+    <input id="hotkey" type="text" placeholder="CommandOrControl+Shift+A" />
+
+    <label for="sources">Trusted EverQuest Legends sources — one per line (domain, or domain/path)</label>
+    <textarea id="sources" placeholder="everquestlegends.com&#10;eqlwiki.com&#10;daybreakgames.com&#10;eqprogression.com&#10;reddit.com/r/EQLegends"></textarea>
+    <div class="hint">Answers citing these are tagged <b>trusted</b>. Anything else is flagged <b>outside</b>, and the app tells you where it looked. Add a path (e.g. <code>reddit.com/r/EQLegends</code>) to trust only that section of a site. EQAI always searches the web and treats every question as being about EverQuest Legends.</div>
+
+    <label for="persona">Assistant style (optional)</label>
+    <textarea id="persona" style="min-height:48px"></textarea>
+
+    <label for="feedurl">Update server URL (advanced)</label>
+    <input id="feedurl" type="text" placeholder="https://…/latest.json" />
+    <div class="hint">Where EQAI checks for new releases on launch. Leave the default unless you host your own.</div>
+
+    <footer>
+      <span id="status"></span>
+      <div style="display:flex; gap:8px;">
+        <button id="test" class="ghost">Test connection</button>
+        <button id="save">Save</button>
+      </div>
+    </footer>
+
+    <script src="settings.js"></script>
+  </body>
+</html>

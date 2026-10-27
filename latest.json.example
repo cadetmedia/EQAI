@@ -1,0 +1,6 @@
+{
+  "version": "1.0.0-alpha.1",
+  "label": "Alpha 1.1",
+  "url": "https://github.com/cadetmedia/EQAI/releases/latest",
+  "notes": "Added conversation memory and fixed capture on multi-monitor setups."
+}
