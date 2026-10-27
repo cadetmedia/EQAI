@@ -10,6 +10,7 @@ const els = {
   geminiModel: document.getElementById('gemini-model'),
   hotkey: document.getElementById('hotkey'),
   eqlogdir: document.getElementById('eqlogdir'),
+  usewiki: document.getElementById('usewiki'),
   sources: document.getElementById('sources'),
   persona: document.getElementById('persona'),
   feedurl: document.getElementById('feedurl'),
@@ -47,6 +48,7 @@ function syncProviderBlocks() {
   els.geminiModel.value = s.gemini.model || '';
   els.hotkey.value = s.captureHotkey || '';
   els.eqlogdir.value = s.eqLogDir || '';
+  els.usewiki.checked = s.useWiki !== false;
   els.sources.value = (s.trustedSources || []).join('\n');
   els.persona.value = s.personaPrompt || '';
   els.feedurl.value = s.updateFeedUrl || '';
@@ -130,6 +132,7 @@ document.getElementById('save').addEventListener('click', async () => {
     trustedSources,
     personaPrompt: els.persona.value,
     eqLogDir: els.eqlogdir.value.trim(),
+    useWiki: els.usewiki.checked,
     updateFeedUrl: els.feedurl.value.trim(),
     claude: { apiKey: els.claudeKey.value.trim(), model: els.claudeModel.value.trim() },
     openai: { apiKey: els.openaiKey.value.trim(), model: els.openaiModel.value.trim() },

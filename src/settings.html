@@ -174,6 +174,12 @@
     </div>
     <div class="hint">Turn on logging in-game with <code>/log on</code>. EQAI reads the log (no injection/memory) to know your zone, character and recent kills/loot, and feeds that to the AI so you can ask "what camps <b>here</b>?". Leave blank to auto-detect.</div>
 
+    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-top:14px;">
+      <input id="usewiki" type="checkbox" style="width:auto" />
+      Ground answers with eqlwiki page data (experimental)
+    </label>
+    <div class="hint">When your question refers to "here"/"this", EQAI fetches the matching eqlwiki page and feeds it to the AI for accuracy. Cached locally; turn off if it feels slow.</div>
+
     <label for="sources">Trusted EverQuest Legends sources — one per line (domain, or domain/path)</label>
     <textarea id="sources" placeholder="everquestlegends.com&#10;eqlwiki.com&#10;daybreakgames.com&#10;eqprogression.com&#10;reddit.com/r/EQLegends"></textarea>
     <div class="hint">Answers citing these are tagged <b>trusted</b>. Anything else is flagged <b>outside</b>, and the app tells you where it looked. Add a path (e.g. <code>reddit.com/r/EQLegends</code>) to trust only that section of a site. EQAI always searches the web and treats every question as being about EverQuest Legends.</div>

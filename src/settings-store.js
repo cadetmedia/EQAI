@@ -18,6 +18,8 @@ const DEFAULTS = {
   windowBounds: null,
   // EQ log folder (requires /log on in-game). '' = try to auto-discover.
   eqLogDir: '',
+  // Ground answers with eqlwiki page extracts (experimental).
+  useWiki: true,
   updateFeedUrl: 'https://github.com/cadetmedia/EQAI/releases/latest/download/latest.json',
   trustedSources: [
     'everquestlegends.com',

@@ -1,6 +1,6 @@
 {
   "name": "eqai",
-  "version": "1.0.0-alpha.10",
+  "version": "1.0.0-alpha.11",
   "description": "EQAI — a resizable, always-on-top EverQuest overlay that lets you ask an AI about what's on screen (via region capture) or by typing questions.",
   "main": "src/main.js",
   "scripts": {

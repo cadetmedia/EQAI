@@ -204,6 +204,9 @@ button.active {
   box-shadow: inset 0 0 0 1px var(--gold-deep);
 }
 .copy-btn:hover { color: var(--amber); }
+.cached-badge { margin-top: 8px; font-size: 11px; color: var(--amber-dim); }
+.cached-badge a { color: var(--gem); text-decoration: none; }
+.cached-badge a:hover { text-decoration: underline; }
 .sources {
   margin-top: 9px;
   padding-top: 7px;

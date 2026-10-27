@@ -72,6 +72,7 @@ const { loadSettings, saveSettings } = require('./settings-store');
 const { askAI, testProvider } = require('./ai');
 const { friendlyLabel, compareVersions } = require('./version');
 const logReader = require('./log-reader');
+const knowledge = require('./knowledge');
 const { autoUpdater } = require('electron-updater');
 
 // Silent auto-update only applies to the INSTALLED build. The portable exe can't
@@ -312,16 +313,30 @@ ipcMain.handle('dialog:pick-folder', async () => {
 
 ipcMain.handle('capture:start', () => captureRegion());
 
-ipcMain.handle('ai:ask', async (e, { text, imageDataUrl, history, reqId }) => {
+ipcMain.handle('ai:ask', async (e, { text, imageDataUrl, history, reqId, forceFresh }) => {
   const settings = loadSettings();
+  const lc = logReader.getContext();
+  const zone = lc.zone || '';
+
+  // Instant, free repeats from the local cache (text-only questions).
+  if (!imageDataUrl && !forceFresh) {
+    const cached = knowledge.getCachedAnswer(text, zone);
+    if (cached) return { ok: true, ...cached, cached: true };
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 90000);
   try {
     const onDelta = (chunk) => {
       try { e.sender.send('ai:delta', { id: reqId, chunk }); } catch { /* window gone */ }
     };
-    const logContext = logReader.getContext().summary;
-    const result = await askAI(settings, { text, imageDataUrl, history, logContext, signal: controller.signal }, onDelta);
+    const references = await knowledge.groundingFor(text, lc, settings.useWiki !== false);
+    const result = await askAI(
+      settings,
+      { text, imageDataUrl, history, logContext: lc.summary, references, signal: controller.signal },
+      onDelta
+    );
+    if (!imageDataUrl && result && result.answer) knowledge.putCachedAnswer(text, zone, result);
     return { ok: true, ...result };
   } catch (err) {
     const msg = controller.signal.aborted ? 'Request timed out (90s).' : (err.message || String(err));

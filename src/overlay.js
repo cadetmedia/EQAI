@@ -101,7 +101,7 @@ function setPendingImage(dataUrl) {
   }
 }
 
-async function send(presetText) {
+async function send(presetText, opts = {}) {
   const text = (presetText != null ? presetText : inputEl.value).trim();
   if (!text && !pendingImage) return;
 
@@ -135,11 +135,12 @@ async function send(presetText) {
   messagesEl.scrollTop = messagesEl.scrollHeight;
   streams.set(reqId, body);
 
-  const res = await window.api.ask({ text, imageDataUrl: imageToSend, history, reqId });
+  const res = await window.api.ask({ text, imageDataUrl: imageToSend, history, reqId, forceFresh: !!opts.forceFresh });
   streams.delete(reqId);
 
   if (res.ok) {
     finishAnswer(el, body, res);
+    if (res.cached) addCachedBadge(el, text);
     // Image-only turns store a placeholder so providers don't drop an empty turn.
     history.push({ role: 'user', text: text || '[sent a screenshot]' });
     history.push({ role: 'assistant', text: res.answer || '' });
@@ -148,6 +149,19 @@ async function send(presetText) {
     el.className = 'msg error';
     el.textContent = `⚠ ${res.error}`;
   }
+}
+
+// Cached-answer badge with a one-tap refresh that re-asks the AI fresh.
+function addCachedBadge(el, text) {
+  const row = document.createElement('div');
+  row.className = 'cached-badge';
+  row.appendChild(document.createTextNode('⚡ Instant answer from local cache · '));
+  const refresh = document.createElement('a');
+  refresh.href = '#';
+  refresh.textContent = 'ask fresh';
+  refresh.addEventListener('click', (e) => { e.preventDefault(); send(text, { forceFresh: true }); });
+  row.appendChild(refresh);
+  el.appendChild(row);
 }
 
 // Finalize a streamed answer: authoritative text, source-trust banner, citations.
