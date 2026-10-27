@@ -11,6 +11,7 @@
   --gem: #67cdfa;
   --user-bubble: rgba(232, 193, 106, 0.12);
   --ai-bubble: rgba(103, 205, 250, 0.06);
+  --panel-alpha: 0.92; /* overlay transparency, driven by the slider */
   --frame: inset 0 0 0 2px #2a2110,
            inset 0 0 0 3px var(--gold-dim),
            inset 0 0 0 5px #352a14,
@@ -36,7 +37,7 @@ html, body {
   height: 100vh;
   background:
     radial-gradient(120% 80% at 50% 0%, rgba(103,205,250,0.05), transparent 60%),
-    linear-gradient(180deg, var(--stone-top), var(--stone-bot));
+    linear-gradient(180deg, rgba(27,29,39,var(--panel-alpha)), rgba(10,11,17,var(--panel-alpha)));
   border: 1px solid #000;
   border-radius: 10px;
   box-shadow: var(--frame);
@@ -67,6 +68,31 @@ html, body {
 }
 .version { font-size: 10px; color: var(--amber-dim); letter-spacing: 0.5px; margin-left: 2px; }
 .controls { -webkit-app-region: no-drag; display: flex; gap: 5px; }
+
+/* Transparency slider popover */
+#opacity-pop {
+  -webkit-app-region: no-drag;
+  position: absolute;
+  top: 44px;
+  right: 10px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, #23252f, #15161d);
+  border: 1px solid #000;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--gold-deep), 0 8px 20px rgba(0,0,0,0.6);
+  font-size: 11px;
+  color: var(--amber);
+}
+#opacity-pop.hidden { display: none; }
+#opacity-range { -webkit-appearance: none; width: 130px; height: 5px; border-radius: 3px;
+  background: linear-gradient(90deg, rgba(232,193,106,0.25), var(--gold)); outline: none; }
+#opacity-range::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%;
+  background: linear-gradient(180deg, #f3d989, var(--gold-dim)); border: 1px solid #000;
+  box-shadow: inset 0 0 0 1px #fff3cf; cursor: pointer; }
 
 /* Update banner in the message list */
 .msg.update { border-left: 2px solid var(--gold); background: rgba(232,193,106,0.1); }

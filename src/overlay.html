@@ -20,6 +20,7 @@
           <span class="version" id="version"></span>
         </span>
         <div class="controls">
+          <button id="btn-opacity" class="icon" title="Overlay transparency">◐</button>
           <button id="btn-clickthrough" class="icon" title="Toggle click-through (lets clicks pass to the game)">👆</button>
           <button id="btn-settings" class="icon" title="Settings">⚙</button>
           <button id="btn-clear" class="icon" title="Clear conversation">🗑</button>
@@ -38,6 +39,11 @@
         <textarea id="input" rows="1" placeholder="Ask about a quest, drop, spawn… or capture the screen"></textarea>
         <button id="btn-send" class="send">Send</button>
       </footer>
+
+      <div id="opacity-pop" class="hidden">
+        <span>Transparency</span>
+        <input id="opacity-range" type="range" min="15" max="100" value="92" />
+      </div>
 
       <div id="resize-grip" title="Drag to resize"></div>
     </div>

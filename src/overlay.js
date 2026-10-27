@@ -141,6 +141,28 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 });
 document.getElementById('thumb-remove').addEventListener('click', () => setPendingImage(null));
 
+// Transparency slider: fades the panel background (text stays readable).
+// Remembered per-machine via localStorage.
+const opacityPop = document.getElementById('opacity-pop');
+const opacityRange = document.getElementById('opacity-range');
+
+function applyPanelAlpha(pct) {
+  const alpha = Math.max(15, Math.min(100, pct)) / 100;
+  document.documentElement.style.setProperty('--panel-alpha', String(alpha));
+}
+try {
+  const saved = localStorage.getItem('panelOpacity');
+  if (saved) { opacityRange.value = saved; applyPanelAlpha(Number(saved)); }
+} catch { /* ignore */ }
+
+document.getElementById('btn-opacity').addEventListener('click', () => {
+  opacityPop.classList.toggle('hidden');
+});
+opacityRange.addEventListener('input', () => {
+  applyPanelAlpha(Number(opacityRange.value));
+  try { localStorage.setItem('panelOpacity', opacityRange.value); } catch { /* ignore */ }
+});
+
 // Click-through: when active, mouse events pass to the game. The title bar stays
 // interactive via a short grace toggle (click the button again to regain control).
 const ctBtn = document.getElementById('btn-clickthrough');
