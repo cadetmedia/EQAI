@@ -84,7 +84,7 @@ function isTrusted(url, trustedSources) {
   return (trustedSources || []).some((e) => matchesSource(url, e));
 }
 
-async function askAI(settings, { text, imageDataUrl }) {
+async function askAI(settings, { text, imageDataUrl, history }, onDelta) {
   const name = settings.provider || 'claude';
   const provider = PROVIDERS[name];
   if (!provider) throw new Error(`Unknown AI provider: ${name}`);
@@ -101,8 +101,9 @@ async function askAI(settings, { text, imageDataUrl }) {
     text,
     imageDataUrl,
     systemPrompt,
+    history,
     trustedSources: settings.trustedSources,
-  });
+  }, onDelta);
 
   // Dedupe + classify citations against the trusted list.
   const seen = new Set();

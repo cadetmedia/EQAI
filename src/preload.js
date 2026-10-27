@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('api', {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (next) => ipcRenderer.invoke('settings:set', next),
   ask: (payload) => ipcRenderer.invoke('ai:ask', payload),
+  onAiDelta: (cb) => ipcRenderer.on('ai:delta', (_e, chunk) => cb(chunk)),
   testConnection: (payload) => ipcRenderer.invoke('ai:test', payload),
   startCapture: () => ipcRenderer.invoke('capture:start'),
   onCaptureResult: (cb) =>

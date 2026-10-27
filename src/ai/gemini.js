@@ -1,6 +1,6 @@
-// Google Gemini provider. Uses Google Search grounding so answers are backed by
-// real pages, and returns the grounding citations. Gemini has a free API tier
-// (keys from Google AI Studio), which makes it the no-cost option for users.
+// Google Gemini provider. Streams the answer, remembers prior turns, and uses
+// Google Search grounding for citations. Has a free API tier (Google AI Studio).
+const { streamSSE } = require('./stream');
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 function splitDataUrl(dataUrl) {
@@ -9,8 +9,7 @@ function splitDataUrl(dataUrl) {
   return { mediaType: m[1], data: m[2] };
 }
 
-// Gemini grounding returns Google redirect URLs. Resolve them to the real source
-// so trusted/outside tagging and the clickable link point at the actual site.
+// Gemini grounding returns Google redirect URLs; resolve to the real source.
 async function resolveFinal(url) {
   try {
     const ctrl = new AbortController();
@@ -23,56 +22,65 @@ async function resolveFinal(url) {
   }
 }
 
-async function ask(cfg, { text, imageDataUrl, systemPrompt }) {
+async function ask(cfg, { text, imageDataUrl, systemPrompt, history }, onDelta) {
   const parts = [{ text: text || 'What am I looking at in EverQuest Legends?' }];
   if (imageDataUrl) {
     const img = splitDataUrl(imageDataUrl);
     if (img) parts.push({ inline_data: { mime_type: img.mediaType, data: img.data } });
   }
 
+  const contents = [];
+  for (const h of history || []) {
+    if (!h || !h.text) continue;
+    contents.push({ role: h.role === 'assistant' ? 'model' : 'user', parts: [{ text: h.text }] });
+  }
+  contents.push({ role: 'user', parts });
+
   const model = cfg.model || 'gemini-2.0-flash';
-  const res = await fetch(`${BASE}/${model}:generateContent?key=${encodeURIComponent(cfg.apiKey)}`, {
+  const res = await fetch(`${BASE}/${model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(cfg.apiKey)}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       system_instruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: 'user', parts }],
-      tools: [{ google_search: {} }], // web-search grounding
+      contents,
+      tools: [{ google_search: {} }],
       generationConfig: { maxOutputTokens: 1536 },
     }),
   });
-
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
     throw new Error(`Gemini API ${res.status}: ${detail.slice(0, 500)}`);
   }
-  const json = await res.json();
-  const cand = (json.candidates || [])[0] || {};
-  const answer = ((cand.content && cand.content.parts) || [])
-    .map((p) => p.text || '')
-    .join('');
 
-  const chunks = (cand.groundingMetadata && cand.groundingMetadata.groundingChunks) || [];
-  const raw = chunks
-    .filter((c) => c.web && c.web.uri)
-    .map((c) => ({ url: c.web.uri, title: c.web.title }));
+  let answer = '';
+  const raw = [];
+  await streamSSE(res, (data) => {
+    let ev;
+    try { ev = JSON.parse(data); } catch { return; }
+    const cand = (ev.candidates || [])[0];
+    if (!cand) return;
+    for (const p of (cand.content && cand.content.parts) || []) {
+      if (p.text) {
+        answer += p.text;
+        if (onDelta) onDelta(p.text);
+      }
+    }
+    const chunks = (cand.groundingMetadata && cand.groundingMetadata.groundingChunks) || [];
+    for (const c of chunks) if (c.web && c.web.uri) raw.push({ url: c.web.uri, title: c.web.title });
+  });
+
   const citations = await Promise.all(
     raw.slice(0, 8).map(async (c) => ({ url: await resolveFinal(c.url), title: c.title }))
   );
-
   return { answer: answer.trim(), citations };
 }
 
-// Lightweight auth check.
 async function test(cfg) {
   const model = cfg.model || 'gemini-2.0-flash';
   const res = await fetch(`${BASE}/${model}:generateContent?key=${encodeURIComponent(cfg.apiKey)}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
-      generationConfig: { maxOutputTokens: 8 },
-    }),
+    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'ping' }] }], generationConfig: { maxOutputTokens: 8 } }),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => '');

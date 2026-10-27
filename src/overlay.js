@@ -6,6 +6,14 @@ const thumbImg = document.getElementById('thumb');
 
 let pendingImage = null; // data URL of a captured region waiting to be sent
 
+// Conversation memory: prior turns sent with each question so follow-ups keep
+// context. Capped to keep token use reasonable. Reset by the Clear button.
+let history = [];
+const MAX_HISTORY = 12;
+
+// The answer element currently being streamed into (receives ai:delta chunks).
+let activeAnswerSpan = null;
+
 function addMessage(role, text, imageDataUrl) {
   const el = document.createElement('div');
   el.className = `msg ${role}`;
@@ -34,8 +42,8 @@ function setPendingImage(dataUrl) {
   }
 }
 
-async function send() {
-  const text = inputEl.value.trim();
+async function send(presetText) {
+  const text = (presetText != null ? presetText : inputEl.value).trim();
   if (!text && !pendingImage) return;
 
   // Make sure an account is linked before spending a (their) API call.
@@ -49,27 +57,43 @@ async function send() {
 
   addMessage('user', text, pendingImage);
   const imageToSend = pendingImage;
-  inputEl.value = '';
-  inputEl.style.height = 'auto';
+  if (presetText == null) {
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+  }
   setPendingImage(null);
 
-  const thinking = addMessage('ai thinking', 'Searching EverQuest Legends sources…');
-  const res = await window.api.ask({ text, imageDataUrl: imageToSend });
-  thinking.remove();
+  // Create the answer bubble; streamed tokens land in `body` as they arrive.
+  const el = document.createElement('div');
+  el.className = 'msg ai';
+  const body = document.createElement('div');
+  body.className = 'answer';
+  body.textContent = 'Searching EverQuest Legends sources…';
+  el.appendChild(body);
+  messagesEl.appendChild(el);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  activeAnswerSpan = body;
+
+  const res = await window.api.ask({ text, imageDataUrl: imageToSend, history });
+  activeAnswerSpan = null;
 
   if (res.ok) {
-    renderAnswer(res);
+    finishAnswer(el, body, res);
+    history.push({ role: 'user', text });
+    history.push({ role: 'assistant', text: res.answer || '' });
+    if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
   } else {
-    addMessage('error', `⚠ ${res.error}`);
+    el.className = 'msg error';
+    el.textContent = `⚠ ${res.error}`;
   }
 }
 
-// Render an AI answer with a source-trust banner and clickable citations.
-function renderAnswer(res) {
-  const el = document.createElement('div');
-  el.className = 'msg ai';
+// Finalize a streamed answer: authoritative text, source-trust banner, citations.
+function finishAnswer(el, body, res) {
+  // Prefer the authoritative final text; otherwise keep what streamed in.
+  if (res.answer) body.textContent = res.answer;
+  else if (body.dataset.started !== '1') body.textContent = '(empty response)';
 
-  // Banner: guaranteed by the app based on the cited domains.
   const banner = document.createElement('div');
   if (!res.searched || !res.citations.length) {
     banner.className = 'srcbanner warn';
@@ -81,12 +105,7 @@ function renderAnswer(res) {
     banner.className = 'srcbanner ok';
     banner.textContent = '✓ Answered from your trusted EverQuest Legends sources.';
   }
-  el.appendChild(banner);
-
-  const body = document.createElement('div');
-  body.className = 'answer';
-  body.textContent = res.answer || '(empty response)';
-  el.appendChild(body);
+  el.insertBefore(banner, body);
 
   if (res.citations && res.citations.length) {
     const srcWrap = document.createElement('div');
@@ -118,9 +137,19 @@ function renderAnswer(res) {
     el.appendChild(srcWrap);
   }
 
-  messagesEl.appendChild(el);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
+
+// Streamed tokens from the main process append into the active answer bubble.
+window.api.onAiDelta((chunk) => {
+  if (!activeAnswerSpan) return;
+  if (activeAnswerSpan.dataset.started !== '1') {
+    activeAnswerSpan.textContent = '';
+    activeAnswerSpan.dataset.started = '1';
+  }
+  activeAnswerSpan.textContent += chunk;
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+});
 
 async function capture() {
   const dataUrl = await window.api.startCapture();
@@ -138,6 +167,12 @@ document.getElementById('btn-settings').addEventListener('click', () => window.a
 document.getElementById('btn-clear').addEventListener('click', () => {
   messagesEl.innerHTML = '';
   setPendingImage(null);
+  history = []; // forget the conversation
+});
+
+// Quick-prompt chips: one tap sends a common question (using any pending capture).
+document.querySelectorAll('#quickbar .chip').forEach((chip) => {
+  chip.addEventListener('click', () => send(chip.dataset.prompt));
 });
 document.getElementById('thumb-remove').addEventListener('click', () => setPendingImage(null));
 

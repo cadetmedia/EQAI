@@ -1,5 +1,6 @@
-// Anthropic (Claude) provider. Uses the server-side web_search tool so answers
-// are grounded in real pages, and returns the citations Claude actually used.
+// Anthropic (Claude) provider. Streams the answer, remembers prior turns, and
+// uses the server-side web_search tool so answers are grounded with citations.
+const { streamSSE } = require('./stream');
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
 
 function splitDataUrl(dataUrl) {
@@ -8,16 +9,21 @@ function splitDataUrl(dataUrl) {
   return { mediaType: m[1], data: m[2] };
 }
 
-async function ask(cfg, { text, imageDataUrl, systemPrompt }) {
+// Prior turns are sent as plain text; the current turn carries any image.
+function buildMessages(history, currentContent) {
+  const msgs = [];
+  for (const h of history || []) {
+    if (h && h.text) msgs.push({ role: h.role === 'assistant' ? 'assistant' : 'user', content: h.text });
+  }
+  msgs.push({ role: 'user', content: currentContent });
+  return msgs;
+}
+
+async function ask(cfg, { text, imageDataUrl, systemPrompt, history }, onDelta) {
   const content = [];
   if (imageDataUrl) {
     const img = splitDataUrl(imageDataUrl);
-    if (img) {
-      content.push({
-        type: 'image',
-        source: { type: 'base64', media_type: img.mediaType, data: img.data },
-      });
-    }
+    if (img) content.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
   }
   content.push({ type: 'text', text: text || 'What am I looking at in EverQuest Legends?' });
 
@@ -32,39 +38,34 @@ async function ask(cfg, { text, imageDataUrl, systemPrompt }) {
       model: cfg.model || 'claude-sonnet-4-5',
       max_tokens: 1536,
       system: systemPrompt,
-      // Server-side web search: Anthropic runs the searches and returns results
-      // + citations inline. max_uses caps how many searches per answer.
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
-      messages: [{ role: 'user', content }],
+      stream: true,
+      messages: buildMessages(history, content),
     }),
   });
-
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
     throw new Error(`Claude API ${res.status}: ${detail.slice(0, 500)}`);
   }
-  const json = await res.json();
 
-  // Assemble the answer text. Prefer the citations Claude actually attached to
-  // its text (the sources it really used). Only if it cited nothing do we fall
-  // back to the raw search results, so the trusted/outside flag reflects usage.
   let answer = '';
   const cited = [];
   const searchResults = [];
-  for (const block of json.content || []) {
-    if (block.type === 'text') {
-      answer += block.text;
-      for (const cit of block.citations || []) {
-        if (cit.url) cited.push({ url: cit.url, title: cit.title });
+  await streamSSE(res, (data) => {
+    let ev;
+    try { ev = JSON.parse(data); } catch { return; }
+    if (ev.type === 'content_block_delta' && ev.delta) {
+      if (ev.delta.type === 'text_delta' && ev.delta.text) {
+        answer += ev.delta.text;
+        if (onDelta) onDelta(ev.delta.text);
+      } else if (ev.delta.type === 'citations_delta' && ev.delta.citation && ev.delta.citation.url) {
+        cited.push({ url: ev.delta.citation.url, title: ev.delta.citation.title });
       }
-    } else if (block.type === 'web_search_tool_result' && Array.isArray(block.content)) {
-      for (const r of block.content) {
-        if (r.type === 'web_search_result' && r.url) {
-          searchResults.push({ url: r.url, title: r.title });
-        }
-      }
+    } else if (ev.type === 'content_block_start' && ev.content_block && ev.content_block.type === 'web_search_tool_result') {
+      const c = ev.content_block.content;
+      if (Array.isArray(c)) for (const r of c) if (r && r.url) searchResults.push({ url: r.url, title: r.title });
     }
-  }
+  });
 
   return { answer: answer.trim(), citations: cited.length ? cited : searchResults };
 }

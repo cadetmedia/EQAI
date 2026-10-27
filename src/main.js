@@ -190,10 +190,13 @@ ipcMain.handle('settings:set', (_e, next) => {
 
 ipcMain.handle('capture:start', () => captureRegion());
 
-ipcMain.handle('ai:ask', async (_e, { text, imageDataUrl }) => {
+ipcMain.handle('ai:ask', async (e, { text, imageDataUrl, history }) => {
   const settings = loadSettings();
   try {
-    const result = await askAI(settings, { text, imageDataUrl });
+    const onDelta = (chunk) => {
+      try { e.sender.send('ai:delta', chunk); } catch { /* window gone */ }
+    };
+    const result = await askAI(settings, { text, imageDataUrl, history }, onDelta);
     return { ok: true, ...result };
   } catch (err) {
     return { ok: false, error: err.message || String(err) };
