@@ -148,6 +148,12 @@ Installed copies then see the update on next launch (the feed URL below resolves
 the newest release's `latest.json`). Releases are **not** marked as GitHub
 "prerelease" even for alpha/beta, so the stable `releases/latest` URL keeps working.
 
+**Silent updates (installer):** the installer is a per-user **one-click** build, so
+the app updates itself the clean way — it downloads the new version in the
+background and, when you click **Restart & install**, swaps itself and relaunches
+with **no setup wizard, no UAC prompt, and no need to tab out of the game**. (The
+portable `.exe` can't self-replace, so it shows a Download link instead.)
+
 **Update feed:** `updateFeedUrl` in Settings points at a small JSON file you host
 (e.g. a GitHub raw `latest.json`). When its `version` is newer than the installed
 one, EQAI shows an "Update available" banner with a **Download** button that opens

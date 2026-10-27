@@ -293,9 +293,10 @@ ipcMain.handle('update:check', async () => {
   return checkLatestJson();
 });
 
-// Installed build: apply the downloaded update now (quits, installs, relaunches).
+// Installed build: apply the downloaded update now. (true, true) = silent
+// install (no wizard/UAC thanks to the per-user one-click installer) then relaunch.
 ipcMain.on('update:install', () => {
-  if (CAN_AUTO_UPDATE) autoUpdater.quitAndInstall();
+  if (CAN_AUTO_UPDATE) autoUpdater.quitAndInstall(true, true);
 });
 
 function sendUpdateEvent(ev) {
