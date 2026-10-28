@@ -313,13 +313,20 @@ ipcMain.handle('dialog:pick-folder', async () => {
 
 ipcMain.handle('capture:start', () => captureRegion());
 
-ipcMain.handle('ai:ask', async (e, { text, imageDataUrl, history, reqId, forceFresh }) => {
+// The next wider search tier the user can choose to escalate to.
+function nextScope(scope, settings) {
+  if (scope === 'trusted') return (settings.closeSources && settings.closeSources.length) ? 'close' : 'outside';
+  if (scope === 'close') return 'outside';
+  return null;
+}
+
+ipcMain.handle('ai:ask', async (e, { text, imageDataUrl, history, reqId, forceFresh, scope = 'trusted' }) => {
   const settings = loadSettings();
   const lc = logReader.getContext();
   const zone = lc.zone || '';
 
-  // Instant, free repeats from the local cache (text-only questions).
-  if (!imageDataUrl && !forceFresh) {
+  // Instant, free repeats from the local cache (only the initial trusted ask).
+  if (scope === 'trusted' && !imageDataUrl && !forceFresh) {
     const cached = knowledge.getCachedAnswer(text, zone);
     if (cached) return { ok: true, ...cached, cached: true };
   }
@@ -333,11 +340,12 @@ ipcMain.handle('ai:ask', async (e, { text, imageDataUrl, history, reqId, forceFr
     const references = await knowledge.groundingFor(text, lc, settings.useWiki !== false);
     const result = await askAI(
       settings,
-      { text, imageDataUrl, history, logContext: lc.summary, references, signal: controller.signal },
+      { text, imageDataUrl, history, logContext: lc.summary, references, scope, signal: controller.signal },
       onDelta
     );
-    if (!imageDataUrl && result && result.answer) knowledge.putCachedAnswer(text, zone, result);
-    return { ok: true, ...result };
+    const escalateTo = result.notFound ? nextScope(scope, settings) : null;
+    if (!result.notFound && !imageDataUrl && result.answer) knowledge.putCachedAnswer(text, zone, result);
+    return { ok: true, ...result, escalateTo };
   } catch (err) {
     const msg = controller.signal.aborted ? 'Request timed out (90s).' : (err.message || String(err));
     return { ok: false, error: msg };

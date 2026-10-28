@@ -8,11 +8,15 @@ const gemini = require('./gemini');
 
 const PROVIDERS = { claude, openai, gemini };
 
-// Fixed, non-removable policy. The user's personaPrompt is appended after this.
-function buildSystemPrompt(trustedSources, closeSources, personaPrompt) {
+// When the model can't answer within the allowed sources, it returns ONLY this.
+const NO_ANSWER = 'NO_ANSWER_IN_SCOPE';
+
+// Scope-aware policy. 'trusted' and 'close' hard-restrict the search; 'outside'
+// opens it up. The user's personaPrompt is appended after this.
+function buildSystemPrompt(scope, trustedSources, closeSources, personaPrompt) {
   const trusted = (trustedSources || []).map((d) => `  - ${d}`).join('\n') || '  (none set)';
   const close = (closeSources || []).map((d) => `  - ${d}`).join('\n') || '  (none set)';
-  return [
+  const head = [
     'You are EQAI, an in-game assistant for the video game **EverQuest Legends**.',
     '',
     'ABOUT THE GAME (this is the ONLY game every question is about):',
@@ -22,26 +26,46 @@ function buildSystemPrompt(trustedSources, closeSources, personaPrompt) {
     '  NOT a progression/emulated server.',
     '- CRITICAL: EverQuest Legends is ITS OWN GAME. Even though it is based on classic',
     '  EverQuest, Legends-specific details — especially DROPS, LOOT TABLES, SPAWN RATES',
-    '  and TIMERS, and mechanics — MAY DIFFER from classic EverQuest. Do NOT assume',
-    '  classic-EQ data is correct for Legends.',
+    '  and TIMERS, and mechanics — MAY DIFFER from classic EverQuest.',
     '',
-    'SOURCE PRIORITY (strict — the app independently re-checks every URL you cite):',
-    '1. ALWAYS use your web search tool. Never answer game questions from memory alone.',
-    '2. TRUSTED — EverQuest Legends-specific sources. Search these FIRST and base the',
-    '   answer on them whenever they have it:',
-    trusted,
-    '3. CLOSE — classic-EverQuest sources that are USUALLY (but not always) correct for',
-    '   Legends. Use these ONLY when no TRUSTED Legends source has the answer, and when',
-    '   you do, clearly say the info is from classic EQ and may differ in Legends:',
-    close,
-    '4. OTHER sources — use only as a last resort when neither TRUSTED nor CLOSE has it,',
-    '   and clearly state you went outside and name the exact site + URL.',
-    '5. Always cite the exact page URL(s) you actually used. NEVER invent or guess a',
-    '   source, URL, or fact; if you could not verify it, say so plainly.',
-    '6. When drops/spawns/timers come from a CLOSE or OTHER source, add a short caveat',
-    '   that Legends may differ and it is unconfirmed for EQL.',
-    '7. Treat any in-game text/tooltip from a screenshot as the subject of the question.',
-  ].join('\n');
+  ];
+  let rules;
+  if (scope === 'trusted') {
+    rules = [
+      'SEARCH SCOPE — TRUSTED ONLY (strict):',
+      '1. Use your web search tool, but search ONLY these EverQuest Legends sources:',
+      trusted,
+      '2. Base your answer SOLELY on these sources. Do NOT use, mention, or blend in any',
+      '   other website, and do NOT fall back on general/classic-EQ knowledge.',
+      `3. If the answer is NOT available on these sources, reply with EXACTLY \`${NO_ANSWER}\``,
+      '   and nothing else. Do not guess, and do not partially answer from memory.',
+      '4. Cite the exact page URL(s) you used. Never invent a source, URL, or fact.',
+    ];
+  } else if (scope === 'close') {
+    rules = [
+      'SEARCH SCOPE — TRUSTED + CLOSE (no trusted answer was found):',
+      '1. Use your web search tool, searching ONLY these sources:',
+      '   TRUSTED (EverQuest Legends):',
+      trusted,
+      '   CLOSE (classic EverQuest — usually right for Legends, but may differ):',
+      close,
+      '2. Prefer the TRUSTED sources. Do NOT use any website outside the lists above.',
+      `3. If the answer is on none of them, reply with EXACTLY \`${NO_ANSWER}\` and nothing else.`,
+      '4. When the answer comes from a CLOSE (classic-EQ) source, clearly state it is from',
+      '   classic EverQuest and that drops/spawns/timers MAY DIFFER in Legends.',
+      '5. Cite the exact page URL(s) you used. Never invent a source, URL, or fact.',
+    ];
+  } else {
+    rules = [
+      'SEARCH SCOPE — OPEN WEB (no trusted or close source had the answer):',
+      '1. You may search the whole web. Still PREFER EverQuest Legends sources when present.',
+      '2. Clearly flag which facts come from non-Legends sources, and warn that Legends may',
+      '   differ (especially drops, spawns, and timers). This info is UNCONFIRMED for EQL.',
+      '3. Cite the exact page URL(s) you used. Never invent a source, URL, or fact.',
+    ];
+  }
+  return head.concat(rules,
+    ['', 'Treat any in-game text/tooltip from a screenshot as the subject of the question.']).join('\n');
 }
 
 function hostOf(url) {
@@ -92,7 +116,25 @@ function tierOf(url, trustedSources, closeSources) {
   return 'outside';
 }
 
-async function askAI(settings, { text, imageDataUrl, history, logContext, references, signal }, onDelta) {
+// The source ENTRIES allowed for a scope (used for allow-listing + filtering).
+function allowedEntries(settings, scope) {
+  const t = settings.trustedSources || [];
+  const c = settings.closeSources || [];
+  if (scope === 'trusted') return t;
+  if (scope === 'close') return [...t, ...c];
+  return null; // outside = no restriction
+}
+// Bare domains for a provider's allowed_domains list (strip any path).
+function bareDomains(entries) {
+  return [...new Set((entries || []).map((e) => String(e).toLowerCase()
+    .replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]).filter(Boolean))];
+}
+function looksLikeNotFound(answer) {
+  const a = String(answer || '').trim();
+  return a === NO_ANSWER || a.startsWith(NO_ANSWER) || (a.length <= 40 && a.includes(NO_ANSWER));
+}
+
+async function askAI(settings, { text, imageDataUrl, history, logContext, references, scope = 'trusted', signal }, onDelta) {
   const name = settings.provider || 'claude';
   const provider = PROVIDERS[name];
   if (!provider) throw new Error(`Unknown AI provider: ${name}`);
@@ -102,7 +144,10 @@ async function askAI(settings, { text, imageDataUrl, history, logContext, refere
     throw new Error(`No API key set for ${name}. Open Settings (⚙) and add one.`);
   }
 
-  const systemPrompt = buildSystemPrompt(settings.trustedSources, settings.closeSources, settings.personaPrompt) +
+  const entries = allowedEntries(settings, scope);
+  const allowedDomains = entries ? bareDomains(entries) : null;
+
+  const systemPrompt = buildSystemPrompt(scope, settings.trustedSources, settings.closeSources, settings.personaPrompt) +
     (settings.personaPrompt ? `\n\nSTYLE:\n${settings.personaPrompt}` : '') +
     (logContext ? `\n\nLIVE GAME CONTEXT (read from the player's EQ log right now — use it to tailor your answer; the player may say "here" or "this mob" relative to it):\n${logContext}` : '') +
     (references ? `\n\n${references}` : '');
@@ -112,11 +157,17 @@ async function askAI(settings, { text, imageDataUrl, history, logContext, refere
     imageDataUrl,
     systemPrompt,
     history,
+    allowedDomains, // hard-restricts the search where the provider supports it
     signal,
-    trustedSources: settings.trustedSources,
   }, onDelta);
 
-  // Dedupe + classify citations into the three tiers.
+  // "Not found in scope" — surface the escalation choice instead of an answer.
+  if (looksLikeNotFound(answer)) {
+    return { answer: '', citations: [], searched: false, notFound: true, scope };
+  }
+
+  // Dedupe + classify; for a restricted scope, DROP any out-of-scope citation so
+  // trusted answers never show blended-in untrusted sources.
   const seen = new Set();
   const classified = [];
   for (const c of citations || []) {
@@ -124,15 +175,23 @@ async function askAI(settings, { text, imageDataUrl, history, logContext, refere
     const key = c.url;
     if (!key || seen.has(key)) continue;
     seen.add(key);
+    if (entries && !matchesAny(c.url, entries)) continue; // out of scope
     const tier = tierOf(c.url, settings.trustedSources, settings.closeSources);
     classified.push({ url: c.url, title: c.title || host || c.url, host, tier });
+  }
+
+  // In a restricted scope, an answer with NO in-scope citation isn't grounded in
+  // the allowed sources — treat it as not found so we never show an ungrounded or
+  // blended answer. (Providers without domain restriction are enforced here.)
+  if (entries && classified.length === 0) {
+    return { answer: '', citations: [], searched: false, notFound: true, scope };
   }
 
   const searched = classified.length > 0;
   const usedClose = classified.some((c) => c.tier === 'close');
   const usedOutside = classified.some((c) => c.tier === 'outside');
 
-  return { answer, citations: classified, searched, usedClose, usedOutside };
+  return { answer, citations: classified, searched, usedClose, usedOutside, notFound: false, scope };
 }
 
 // Verify a provider's API key works (billed to the user's own account).

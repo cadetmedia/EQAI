@@ -96,6 +96,10 @@ html, body {
 .msg.update { border-left: 2px solid var(--gold); background: rgba(232,193,106,0.1); }
 .msg.update button { margin-top: 8px; }
 
+/* "Not found in scope" escalation card */
+.msg.notfound { border-left: 2px solid var(--yellow); background: rgba(232,210,74,0.08); }
+.msg.notfound .nf-sub { margin-top: 4px; font-size: 12px; color: var(--amber-dim); }
+
 /* Beveled gold-rimmed "gem" buttons */
 button {
   -webkit-app-region: no-drag;

@@ -19,7 +19,7 @@ function buildMessages(history, currentContent) {
   return msgs;
 }
 
-async function ask(cfg, { text, imageDataUrl, systemPrompt, history, signal }, onDelta) {
+async function ask(cfg, { text, imageDataUrl, systemPrompt, history, allowedDomains, signal }, onDelta) {
   const content = [];
   if (imageDataUrl) {
     const img = splitDataUrl(imageDataUrl);
@@ -39,7 +39,13 @@ async function ask(cfg, { text, imageDataUrl, systemPrompt, history, signal }, o
       model: cfg.model || 'claude-sonnet-4-5',
       max_tokens: 1536,
       system: systemPrompt,
-      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
+      tools: [{
+        type: 'web_search_20250305',
+        name: 'web_search',
+        max_uses: 6,
+        // Hard-restrict the search to the allowed domains for this scope.
+        ...(allowedDomains && allowedDomains.length ? { allowed_domains: allowedDomains } : {}),
+      }],
       stream: true,
       messages: buildMessages(history, content),
     }),

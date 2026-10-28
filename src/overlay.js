@@ -14,6 +14,9 @@ const MAX_HISTORY = 12;
 // Active answer bubbles keyed by request id (receives ai:delta chunks).
 const streams = new Map();
 let reqCounter = 0;
+// The model returns ONLY this when it can't answer within the allowed sources;
+// we hold the display until we know the stream isn't just this marker.
+const SENTINEL = 'NO_ANSWER_IN_SCOPE';
 
 function addMessage(role, text, imageDataUrl) {
   const el = document.createElement('div');
@@ -114,13 +117,15 @@ async function send(presetText, opts = {}) {
     }
   }
 
-  addMessage('user', text, pendingImage);
-  const imageToSend = pendingImage;
-  if (presetText == null) {
+  const scope = opts.scope || 'trusted';
+  // Escalation re-asks the same question wider — don't re-add the user bubble.
+  if (!opts.noUserBubble) addMessage('user', text, pendingImage);
+  const imageToSend = opts.noUserBubble ? null : pendingImage;
+  if (presetText == null && !opts.noUserBubble) {
     inputEl.value = '';
     inputEl.style.height = 'auto';
   }
-  setPendingImage(null);
+  if (!opts.noUserBubble) setPendingImage(null);
 
   // Create the answer bubble; streamed tokens land in `body` as they arrive.
   // Each request has its own id so concurrent streams never cross wires.
@@ -129,26 +134,55 @@ async function send(presetText, opts = {}) {
   el.className = 'msg ai';
   const body = document.createElement('div');
   body.className = 'answer';
-  body.textContent = 'Searching EverQuest Legends sources…';
+  body.textContent = scope === 'trusted' ? 'Searching your trusted EverQuest Legends sources…'
+    : scope === 'close' ? 'Searching Project 1999 (classic EQ)…' : 'Searching the wider web…';
   el.appendChild(body);
   messagesEl.appendChild(el);
   messagesEl.scrollTop = messagesEl.scrollHeight;
-  streams.set(reqId, body);
+  streams.set(reqId, { body, buf: '', committed: false });
 
-  const res = await window.api.ask({ text, imageDataUrl: imageToSend, history, reqId, forceFresh: !!opts.forceFresh });
+  const res = await window.api.ask({ text, imageDataUrl: imageToSend, history, reqId, scope, forceFresh: !!opts.forceFresh });
   streams.delete(reqId);
 
-  if (res.ok) {
-    finishAnswer(el, body, res);
-    if (res.cached) addCachedBadge(el, text);
-    // Image-only turns store a placeholder so providers don't drop an empty turn.
-    history.push({ role: 'user', text: text || '[sent a screenshot]' });
-    history.push({ role: 'assistant', text: res.answer || '' });
-    if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
-  } else {
+  if (!res.ok) {
     el.className = 'msg error';
     el.textContent = `⚠ ${res.error}`;
+    return;
   }
+  if (res.notFound) {
+    renderNotFound(el, text, res);
+    return;
+  }
+  finishAnswer(el, body, res);
+  if (res.cached) addCachedBadge(el, text);
+  history.push({ role: 'user', text: text || '[sent a screenshot]' });
+  history.push({ role: 'assistant', text: res.answer || '' });
+  if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
+}
+
+// "Not found in scope" card with an optional button to search the next tier.
+function renderNotFound(el, text, res) {
+  el.className = 'msg ai notfound';
+  el.innerHTML = '';
+  const p = document.createElement('div');
+  p.textContent = res.scope === 'close'
+    ? 'No answer found in your trusted or close (classic-EQ) sources.'
+    : 'No answer found in your trusted EverQuest Legends sources.';
+  el.appendChild(p);
+  const sub = document.createElement('div');
+  sub.className = 'nf-sub';
+  if (res.escalateTo === 'close') sub.textContent = 'Project 1999 (classic EQ) may have it, but Legends could differ.';
+  else if (res.escalateTo === 'outside') sub.textContent = 'Want me to search the wider web? Results would be unconfirmed for Legends.';
+  else sub.textContent = 'No wider sources are configured to search.';
+  el.appendChild(sub);
+  if (res.escalateTo) {
+    const btn = document.createElement('button');
+    btn.textContent = res.escalateTo === 'close' ? '🔍 Search Project 1999 (close)' : '🌐 Search the wider web (outside)';
+    btn.style.marginTop = '8px';
+    btn.addEventListener('click', () => { btn.disabled = true; send(text, { scope: res.escalateTo, noUserBubble: true, forceFresh: true }); });
+    el.appendChild(btn);
+  }
+  messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
 // Cached-answer badge with a one-tap refresh that re-asks the AI fresh.
@@ -234,15 +268,19 @@ function finishAnswer(el, body, res) {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-// Streamed tokens are routed to the bubble for their request id.
+// Streamed tokens are routed to the bubble for their request id. While the
+// buffered text could still be the "not found" sentinel, keep the placeholder
+// so NO_ANSWER_IN_SCOPE never flashes on screen.
 window.api.onAiDelta(({ id, chunk }) => {
-  const span = streams.get(id);
-  if (!span) return;
-  if (span.dataset.started !== '1') {
-    span.textContent = '';
-    span.dataset.started = '1';
+  const s = streams.get(id);
+  if (!s) return;
+  s.buf += chunk;
+  if (!s.committed) {
+    const t = s.buf.trimStart();
+    if (t === '' || SENTINEL.startsWith(t)) return; // still possibly the sentinel — hold
+    s.committed = true;
   }
-  span.textContent += chunk;
+  s.body.textContent = s.buf;
   messagesEl.scrollTop = messagesEl.scrollHeight;
 });
 
