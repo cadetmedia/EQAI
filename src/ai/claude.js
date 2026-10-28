@@ -19,6 +19,33 @@ function buildMessages(history, currentContent) {
   return msgs;
 }
 
+// Anthropic's web-search crawler can't reach some domains (e.g. reddit.com).
+// Remember them so we don't keep sending them in allowed_domains.
+const blockedDomains = new Set();
+
+// Parse "...not accessible to our user agent: ['reddit.com', 'x.com']".
+function parseInaccessible(detail) {
+  const m = /not accessible to our user agent:\s*\[([^\]]*)\]/i.exec(detail || '');
+  if (!m) return [];
+  return m[1].split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '').toLowerCase()).filter(Boolean);
+}
+
+function requestBody(cfg, systemPrompt, messages, allowed) {
+  return JSON.stringify({
+    model: cfg.model || 'claude-sonnet-4-5',
+    max_tokens: 1536,
+    system: systemPrompt,
+    tools: [{
+      type: 'web_search_20250305',
+      name: 'web_search',
+      max_uses: 6,
+      ...(allowed && allowed.length ? { allowed_domains: allowed } : {}),
+    }],
+    stream: true,
+    messages,
+  });
+}
+
 async function ask(cfg, { text, imageDataUrl, systemPrompt, history, allowedDomains, signal }, onDelta) {
   const content = [];
   if (imageDataUrl) {
@@ -26,32 +53,33 @@ async function ask(cfg, { text, imageDataUrl, systemPrompt, history, allowedDoma
     if (img) content.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } });
   }
   content.push({ type: 'text', text: text || 'What am I looking at in EverQuest Legends?' });
+  const messages = buildMessages(history, content);
 
-  const res = await fetch(ENDPOINT, {
-    method: 'POST',
-    signal,
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': cfg.apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: cfg.model || 'claude-sonnet-4-5',
-      max_tokens: 1536,
-      system: systemPrompt,
-      tools: [{
-        type: 'web_search_20250305',
-        name: 'web_search',
-        max_uses: 6,
-        // Hard-restrict the search to the allowed domains for this scope.
-        ...(allowedDomains && allowedDomains.length ? { allowed_domains: allowedDomains } : {}),
-      }],
-      stream: true,
-      messages: buildMessages(history, content),
-    }),
-  });
-  if (!res.ok) {
+  // Start from the requested allow-list minus any domains known to be blocked.
+  let allowed = (allowedDomains && allowedDomains.length)
+    ? allowedDomains.filter((d) => !blockedDomains.has(d))
+    : null;
+
+  let res;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    res = await fetch(ENDPOINT, {
+      method: 'POST',
+      signal,
+      headers: { 'content-type': 'application/json', 'x-api-key': cfg.apiKey, 'anthropic-version': '2023-06-01' },
+      body: requestBody(cfg, systemPrompt, messages, allowed),
+    });
+    if (res.ok) break;
     const detail = await res.text().catch(() => '');
+    // Drop domains Anthropic can't crawl and retry (before any streaming starts).
+    if (res.status === 400 && /not accessible to our user agent/i.test(detail) && allowed) {
+      const bad = parseInaccessible(detail);
+      for (const d of bad) blockedDomains.add(d);
+      const reduced = allowed.filter((d) => !bad.some((b) => d === b || d.endsWith('.' + b)));
+      if (reduced.length !== allowed.length) {
+        allowed = reduced.length ? reduced : null; // null = search unrestricted (we still filter citations)
+        continue;
+      }
+    }
     throw new Error(`Claude API ${res.status}: ${detail.slice(0, 500)}`);
   }
 
