@@ -203,4 +203,12 @@ async function testProvider(provider, cfg) {
   return true;
 }
 
-module.exports = { askAI, testProvider };
+// List the currently-available model ids for a provider.
+async function listModels(provider, cfg) {
+  const p = PROVIDERS[provider];
+  if (!p || !p.listModels) throw new Error(`Unknown provider: ${provider}`);
+  if (!cfg || !cfg.apiKey) throw new Error('No API key provided.');
+  return p.listModels(cfg);
+}
+
+module.exports = { askAI, testProvider, listModels };

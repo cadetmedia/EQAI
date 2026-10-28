@@ -69,7 +69,7 @@ function startLogReader() {
 }
 
 const { loadSettings, saveSettings } = require('./settings-store');
-const { askAI, testProvider } = require('./ai');
+const { askAI, testProvider, listModels } = require('./ai');
 const { friendlyLabel, compareVersions } = require('./version');
 const logReader = require('./log-reader');
 const knowledge = require('./knowledge');
@@ -363,6 +363,17 @@ ipcMain.handle('ai:test', async (_e, { provider, cfg }) => {
     if (!c.model) c.model = saved.model || '';
     await testProvider(provider, c);
     return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message || String(err) };
+  }
+});
+
+ipcMain.handle('ai:models', async (_e, { provider, cfg }) => {
+  try {
+    const c = { ...cfg };
+    if (!c.apiKey) c.apiKey = (loadSettings()[provider] || {}).apiKey || '';
+    const models = await listModels(provider, c);
+    return { ok: true, models };
   } catch (err) {
     return { ok: false, error: err.message || String(err) };
   }

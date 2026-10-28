@@ -127,4 +127,16 @@ async function test(cfg) {
   return true;
 }
 
-module.exports = { ask, test };
+async function listModels(cfg) {
+  const res = await fetch('https://api.anthropic.com/v1/models?limit=100', {
+    headers: { 'x-api-key': cfg.apiKey, 'anthropic-version': '2023-06-01' },
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`${res.status}: ${detail.slice(0, 200)}`);
+  }
+  const json = await res.json();
+  return (json.data || []).map((m) => m.id).filter(Boolean);
+}
+
+module.exports = { ask, test, listModels };

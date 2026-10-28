@@ -56,6 +56,10 @@ function syncProviderBlocks() {
   els.feedurl.value = s.updateFeedUrl || '';
   syncProviderBlocks();
 
+  // Auto-refresh the model list for the active provider if it has a key, so a
+  // stale/retired default gets corrected to a current model automatically.
+  if (s[s.provider] && s[s.provider].hasKey) loadModels(s.provider, { auto: true });
+
   try {
     const v = await window.api.getVersion();
     els.ver.textContent = v.label;
@@ -86,7 +90,55 @@ document.getElementById('check').addEventListener('click', async () => {
   }
 });
 
-els.provider.addEventListener('change', syncProviderBlocks);
+// --- Model picker: fetch current models and auto-correct a stale default -----
+const KEY_EL = () => ({ gemini: els.geminiKey, claude: els.claudeKey, openai: els.openaiKey });
+const MODEL_EL = () => ({ gemini: els.geminiModel, claude: els.claudeModel, openai: els.openaiModel });
+
+function versionScore(id) {
+  const m = String(id).match(/(\d+(?:\.\d+)?)/);
+  return m ? parseFloat(m[1]) : 0;
+}
+function pickBest(models, provider) {
+  if (!models.length) return '';
+  const prefer = provider === 'gemini' ? /flash/i : provider === 'claude' ? /sonnet/i : /^gpt-|^chatgpt-/i;
+  let cands = models.filter((m) => prefer.test(m));
+  const noisy = /(lite|thinking|preview|exp|-8b|-1b|instruct|audio|realtime|search)/i;
+  const clean = cands.filter((m) => !noisy.test(m));
+  if (clean.length) cands = clean;
+  if (!cands.length) cands = models.slice();
+  cands.sort((a, b) => versionScore(b) - versionScore(a) || a.length - b.length);
+  return cands[0];
+}
+
+async function loadModels(provider, opts = {}) {
+  const modelEl = MODEL_EL()[provider];
+  const dl = document.getElementById(`${provider}-models`);
+  const hint = document.getElementById(`${provider}-model-hint`);
+  if (!modelEl || !dl) return;
+  if (!opts.auto) hint.textContent = 'Loading models…';
+  const res = await window.api.listModels({ provider, cfg: { apiKey: cleanKey(KEY_EL()[provider].value) } });
+  if (!res.ok) { hint.textContent = opts.auto ? '' : `⚠ ${res.error}`; return; }
+  const models = res.models || [];
+  dl.innerHTML = '';
+  for (const m of models) { const o = document.createElement('option'); o.value = m; dl.appendChild(o); }
+  const cur = modelEl.value.trim();
+  if (!cur || !models.includes(cur)) {
+    const best = pickBest(models, provider);
+    if (best) { modelEl.value = best; hint.textContent = `${models.length} models available — selected ${best}`; return; }
+  }
+  hint.textContent = `${models.length} models available`;
+}
+
+for (const p of ['gemini', 'claude', 'openai']) {
+  document.getElementById(`${p}-loadmodels`).addEventListener('click', () => loadModels(p));
+  // When a key is entered/changed, fetch models and auto-correct a stale default.
+  KEY_EL()[p].addEventListener('change', () => { if (cleanKey(KEY_EL()[p].value)) loadModels(p, { auto: true }); });
+}
+
+els.provider.addEventListener('change', () => {
+  syncProviderBlocks();
+  loadModels(els.provider.value, { auto: true }); // refresh list for the newly shown provider
+});
 
 // Browse for the EQ log folder.
 document.getElementById('browse-log').addEventListener('click', async () => {
@@ -121,8 +173,14 @@ document.getElementById('test').addEventListener('click', async () => {
   }
   els.status.textContent = 'Testing…';
   const res = await window.api.testConnection({ provider, cfg });
-  els.status.textContent = res.ok ? '✓ Account connected!' : `⚠ ${res.error}`;
-  if (res.ok) setTimeout(() => (els.status.textContent = ''), 4000);
+  if (res.ok) {
+    els.status.textContent = '✓ Account connected!';
+    setTimeout(() => (els.status.textContent = ''), 4000);
+  } else if (/model|not found|404|deprecat|unsupported/i.test(res.error || '')) {
+    els.status.textContent = `⚠ ${res.error} — click “↻ Models” to pick a current model.`;
+  } else {
+    els.status.textContent = `⚠ ${res.error}`;
+  }
 });
 
 document.getElementById('save').addEventListener('click', async () => {

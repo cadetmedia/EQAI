@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('api', {
   ask: (payload) => ipcRenderer.invoke('ai:ask', payload),
   onAiDelta: (cb) => ipcRenderer.on('ai:delta', (_e, ev) => cb(ev)),
   testConnection: (payload) => ipcRenderer.invoke('ai:test', payload),
+  listModels: (payload) => ipcRenderer.invoke('ai:models', payload),
   startCapture: () => ipcRenderer.invoke('capture:start'),
   onCaptureResult: (cb) =>
     ipcRenderer.on('capture:result', (_e, dataUrl) => cb(dataUrl)),

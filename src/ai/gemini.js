@@ -95,4 +95,20 @@ async function test(cfg) {
   return true;
 }
 
-module.exports = { ask, test };
+// List model ids that support generateContent, newest-looking first-ish.
+async function listModels(cfg) {
+  const res = await fetch(`${BASE}?pageSize=200`, {
+    headers: { 'x-goog-api-key': cfg.apiKey },
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`${res.status}: ${detail.slice(0, 200)}`);
+  }
+  const json = await res.json();
+  return (json.models || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+    .map((m) => String(m.name || '').replace(/^models\//, ''))
+    .filter(Boolean);
+}
+
+module.exports = { ask, test, listModels };

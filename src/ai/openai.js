@@ -77,4 +77,19 @@ async function test(cfg) {
   return true;
 }
 
-module.exports = { ask, test };
+async function listModels(cfg) {
+  const res = await fetch('https://api.openai.com/v1/models', {
+    headers: { authorization: `Bearer ${cfg.apiKey}` },
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`${res.status}: ${detail.slice(0, 200)}`);
+  }
+  const json = await res.json();
+  // Keep chat-capable models (gpt-* / o-series / chatgpt-*), drop embeddings etc.
+  return (json.data || []).map((m) => m.id)
+    .filter((id) => /^(gpt-|o\d|chatgpt-)/i.test(id))
+    .filter((id) => !/(embedding|whisper|tts|audio|image|dall-e|moderation|realtime|transcribe)/i.test(id));
+}
+
+module.exports = { ask, test, listModels };

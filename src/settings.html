@@ -111,7 +111,12 @@
       <input id="gemini-key" type="password" placeholder="AIza..." />
       <a class="getkey" data-link="https://aistudio.google.com/apikey" href="#">Get a free Gemini key →</a>
       <label for="gemini-model">Model</label>
-      <input id="gemini-model" type="text" placeholder="gemini-2.0-flash" />
+      <div class="row" style="gap:6px">
+        <input id="gemini-model" type="text" list="gemini-models" placeholder="e.g. gemini-2.5-flash" />
+        <button id="gemini-loadmodels" class="ghost" style="flex:none" type="button">↻ Models</button>
+      </div>
+      <datalist id="gemini-models"></datalist>
+      <div class="hint" id="gemini-model-hint"></div>
       <div class="hint">💲 <b>Cheapest &amp; fastest.</b> Free tier where eligible; otherwise a fraction of a cent per question. Great default.</div>
       <details class="howto">
         <summary>How do I get a free key? (takes ~1 minute)</summary>
@@ -131,7 +136,12 @@
       <input id="claude-key" type="password" placeholder="sk-ant-..." />
       <a class="getkey" data-link="https://console.anthropic.com/settings/keys" href="#">Get an Anthropic API key →</a>
       <label for="claude-model">Model</label>
-      <input id="claude-model" type="text" placeholder="claude-sonnet-4-5" />
+      <div class="row" style="gap:6px">
+        <input id="claude-model" type="text" list="claude-models" placeholder="e.g. claude-sonnet-4-5" />
+        <button id="claude-loadmodels" class="ghost" style="flex:none" type="button">↻ Models</button>
+      </div>
+      <datalist id="claude-models"></datalist>
+      <div class="hint" id="claude-model-hint"></div>
       <div class="hint">💲 Paid API (pay-as-you-go). Strong, detailed answers; web search may add a small per-search fee. A few dollars of credit lasts a long time.</div>
       <details class="howto">
         <summary>How do I set up an Anthropic key?</summary>
@@ -150,7 +160,12 @@
       <input id="openai-key" type="password" placeholder="sk-..." />
       <a class="getkey" data-link="https://platform.openai.com/api-keys" href="#">Get an OpenAI API key →</a>
       <label for="openai-model">Model</label>
-      <input id="openai-model" type="text" placeholder="gpt-4o" />
+      <div class="row" style="gap:6px">
+        <input id="openai-model" type="text" list="openai-models" placeholder="e.g. gpt-4o" />
+        <button id="openai-loadmodels" class="ghost" style="flex:none" type="button">↻ Models</button>
+      </div>
+      <datalist id="openai-models"></datalist>
+      <div class="hint" id="openai-model-hint"></div>
       <div class="hint">💲 Paid API (pay-as-you-go). Solid quality and speed; web search runs via the Responses API. Billed to your OpenAI credits.</div>
       <details class="howto">
         <summary>How do I set up an OpenAI key?</summary>
