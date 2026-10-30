@@ -20,7 +20,6 @@ const DEFAULTS = {
   eqLogDir: '',
   // Ground answers with eqlwiki page extracts (experimental).
   useWiki: true,
-  updateFeedUrl: 'https://github.com/cadetmedia/EQAI/releases/latest/download/latest.json',
   trustedSources: [
     'everquestlegends.com',
     'eqlwiki.com',
@@ -83,6 +82,7 @@ function loadSettings() {
     closeSources: Array.isArray(raw.closeSources) ? raw.closeSources : DEFAULTS.closeSources,
   };
   for (const p of KEY_FIELDS) merged[p].apiKey = decKey(merged[p].apiKey);
+  delete merged.updateFeedUrl; // retired: the feed URL is compiled in (main.js)
   return merged;
 }
 

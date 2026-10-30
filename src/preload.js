@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('api', {
   onHotkeyFailed: (cb) => ipcRenderer.on('hotkey:failed', (_e, accel) => cb(accel)),
   resizeTo: (w, h) => ipcRenderer.send('overlay:resize', { w, h }),
   openExternal: (url) => ipcRenderer.send('open-external', url),
+  copyText: (text) => ipcRenderer.send('clipboard:write', text),
   getVersion: () => ipcRenderer.invoke('app:version'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   getLogContext: () => ipcRenderer.invoke('log:get'),

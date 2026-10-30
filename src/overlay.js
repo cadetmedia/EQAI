@@ -258,7 +258,7 @@ function finishAnswer(el, body, res) {
   copyBtn.textContent = '⧉ Copy';
   copyBtn.addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(res.answer || '');
+      window.api.copyText(res.answer || '');
       copyBtn.textContent = '✓ Copied';
       setTimeout(() => { copyBtn.textContent = '⧉ Copy'; }, 1500);
     } catch { /* ignore */ }
@@ -289,7 +289,7 @@ const logbar = document.getElementById('logbar');
 function renderLog(c) {
   if (!c || !c.connected) { logbar.classList.add('hidden'); return; }
   const bits = [];
-  if (c.zone) bits.push(`📍 ${c.zone}`);
+  if (c.zone) bits.push(`📍 ${c.zoneRaw || c.zone}`);
   if (c.character) bits.push(`🧙 ${c.character}${c.level ? ` · L${c.level}` : ''}`);
   logbar.textContent = bits.length ? bits.join('    ') : '📜 Log connected';
   logbar.classList.remove('hidden');

@@ -153,8 +153,8 @@ Windows runner and publishes a GitHub Release. To release:
    git push origin main
    ```
 3. The workflow builds `EQAI Setup …exe` + `EQAI-portable-…exe`, generates
-   `latest.json`, creates the `v1.0.0-alpha.1` tag, and attaches all three to a new
-   GitHub Release. (Pushes that don't change the version are ignored — the release
+   `latest.json` and `SHA256SUMS.txt`, creates the `v1.0.0-alpha.1` tag, and attaches
+   them all to a new GitHub Release. (Pushes that don't change the version are ignored — the release
    for that version already exists.)
 
 Installed copies then see the update on next launch (the feed URL below resolves to
@@ -167,17 +167,22 @@ background and, when you click **Restart & install**, swaps itself and relaunche
 with **no setup wizard, no UAC prompt, and no need to tab out of the game**. (The
 portable `.exe` can't self-replace, so it shows a Download link instead.)
 
-**Update feed:** `updateFeedUrl` in Settings points at a small JSON file you host
-(e.g. a GitHub raw `latest.json`). When its `version` is newer than the installed
-one, EQAI shows an "Update available" banner with a **Download** button that opens
-the `url`. (This opens the download page in the browser — it does not silently
-install, which also means it works for the portable build.)
+**Update feed:** the portable build checks the newest release's `latest.json`. The
+feed address is built into the app (`UPDATE_FEED_URL` in `src/main.js`) and can't be
+changed from Settings, so nothing that edits your settings file can point the update
+check somewhere else. When its `version` is newer than the installed one, EQAI shows
+an "Update available" banner with a **Download** button that opens this repo's
+Releases page in the browser.
+
+**Verifying a download:** every release includes `SHA256SUMS.txt`. Compare it with
+`certutil -hashfile EQAI-portable-<version>.exe SHA256` (PowerShell / cmd).
+
+**Supply chain:** `.npmrc` sets `ignore-scripts=true`, so no dependency's install
+hook ever runs on your machine or in the release job, and the workflow's GitHub
+Actions are pinned to exact commits.
 
 ## Possible next steps
 
-- Reading the EQ log file for auto-context (zone, cons, item links, spawn timers)
-- A local cache/knowledge base of past answers to cut API cost and speed repeats
 - A character profile (class/level/race) auto-added to the prompt
 - Multi-monitor region picking and one-key re-capture of the last region
-- A live model dropdown pulled from each provider's models endpoint
 - Code signing to remove the first-download SmartScreen warning

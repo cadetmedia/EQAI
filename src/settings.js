@@ -14,7 +14,6 @@ const els = {
   sources: document.getElementById('sources'),
   closesources: document.getElementById('closesources'),
   persona: document.getElementById('persona'),
-  feedurl: document.getElementById('feedurl'),
   ver: document.getElementById('ver'),
   updStatus: document.getElementById('upd-status'),
   status: document.getElementById('status'),
@@ -53,7 +52,6 @@ function syncProviderBlocks() {
   els.sources.value = (s.trustedSources || []).join('\n');
   els.closesources.value = (s.closeSources || []).join('\n');
   els.persona.value = s.personaPrompt || '';
-  els.feedurl.value = s.updateFeedUrl || '';
   syncProviderBlocks();
 
   // Auto-refresh the model list for the active provider if it has a key, so a
@@ -200,7 +198,6 @@ document.getElementById('save').addEventListener('click', async () => {
     personaPrompt: els.persona.value,
     eqLogDir: els.eqlogdir.value.trim(),
     useWiki: els.usewiki.checked,
-    updateFeedUrl: els.feedurl.value.trim(),
     claude: { apiKey: cleanKey(els.claudeKey.value), model: els.claudeModel.value.trim() },
     openai: { apiKey: cleanKey(els.openaiKey.value), model: els.openaiModel.value.trim() },
     gemini: { apiKey: cleanKey(els.geminiKey.value), model: els.geminiModel.value.trim() },

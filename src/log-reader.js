@@ -24,7 +24,9 @@ function resetCtx() {
     dir: null,
     character: null,
     server: null,
-    zone: null,
+    zone: null, // base zone name, difficulty marker stripped
+    zoneRaw: null, // exactly as the log printed it
+    zoneTier: null, // e.g. 'Awakened, difficulty d1', 'Group 3 instance', 'open world'
     level: null,
     loc: null,
     recentKills: [],
@@ -42,6 +44,27 @@ function pushCapped(arr, val, cap) {
 // Common EQ log false-positive zone lines to ignore.
 const NOT_A_ZONE = /(an area|the wrong|no-drop|PvP|a hostile|the housing)/i;
 
+// EQ Legends puts the difficulty in the zone name itself: a trailing
+// "(Awakened|Adaptive|Fused|Refined)" is d1-d4, a "- Solo" / "- Group N" suffix
+// is the base instance (weekly lockout), and a bare name is the open world.
+// Strip the marker so wiki lookups hit the zone page; keep the tier for the AI.
+const ZONE_DIFFICULTY = ['Awakened', 'Adaptive', 'Fused', 'Refined'];
+function splitZone(raw) {
+  let name = raw.trim();
+  let tier = 'open world';
+  let mm;
+  if ((mm = /^(.+?)\s*\((Awakened|Adaptive|Fused|Refined)\)$/i.exec(name))) {
+    name = mm[1];
+    const d = ZONE_DIFFICULTY.findIndex((x) => x.toLowerCase() === mm[2].toLowerCase()) + 1;
+    tier = `${ZONE_DIFFICULTY[d - 1]}, difficulty d${d}`;
+  }
+  if ((mm = /^(.+?)\s+-\s+(Solo|Group(?:\s+\d+)?)$/i.exec(name))) {
+    name = mm[1];
+    if (tier === 'open world') tier = `${mm[2]} instance`;
+  }
+  return { name, tier };
+}
+
 function parseLine(line, fileChar, fileServer) {
   const m = /^\[[^\]]*\]\s*(.*)$/.exec(line);
   const msg = (m ? m[1] : line).trim();
@@ -56,12 +79,17 @@ function parseLine(line, fileChar, fileServer) {
   }
 
   if ((mm = /^You have entered (.+?)\.?$/.exec(msg)) && !NOT_A_ZONE.test(mm[1])) {
-    ctx.zone = mm[1]; changed = true;
+    const z = splitZone(mm[1]);
+    ctx.zoneRaw = mm[1];
+    ctx.zone = z.name;
+    ctx.zoneTier = z.tier;
+    changed = true;
   } else if ((mm = /Welcome to level (\d+)!/.exec(msg))) {
     ctx.level = Number(mm[1]); changed = true;
   } else if ((mm = /^You have slain (.+?)!$/.exec(msg))) {
     pushCapped(ctx.recentKills, mm[1], 5); changed = true;
-  } else if ((mm = /--\s*You have looted (?:a |an |the )?(.+?)\.?\s*--/.exec(msg))) {
+  } else if ((mm = /--\s*You have looted (?:a |an |the |\d+ )?(.+?)(?: from .+? corpse)?\.?\s*--/.exec(msg))) {
+    // "--You have looted a Bone Chip from a skeleton's corpse.--" -> "Bone Chip"
     pushCapped(ctx.recentLoot, mm[1], 5); changed = true;
   } else if ((mm = /^Your Location is\s+(.+)$/.exec(msg))) {
     ctx.loc = mm[1].trim(); changed = true;
@@ -143,7 +171,7 @@ function buildSummary() {
   if (!ctx.connected) return '';
   const parts = [];
   if (ctx.character) parts.push(`Character: ${ctx.character}${ctx.server ? ` (server ${ctx.server})` : ''}`);
-  if (ctx.zone) parts.push(`Current zone: ${ctx.zone}`);
+  if (ctx.zone) parts.push(`Current zone: ${ctx.zone}${ctx.zoneTier ? ` (${ctx.zoneTier})` : ''}`);
   if (ctx.level) parts.push(`Level: ${ctx.level}`);
   if (ctx.recentKills.length) parts.push(`Recently killed: ${ctx.recentKills.slice(-3).join(', ')}`);
   if (ctx.recentLoot.length) parts.push(`Recently looted: ${ctx.recentLoot.slice(-3).join(', ')}`);
@@ -157,6 +185,8 @@ function getContext() {
     character: ctx.character,
     server: ctx.server,
     zone: ctx.zone,
+    zoneRaw: ctx.zoneRaw,
+    zoneTier: ctx.zoneTier,
     level: ctx.level,
     recentKills: [...ctx.recentKills],
     recentLoot: [...ctx.recentLoot],

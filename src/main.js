@@ -12,6 +12,8 @@ const {
   shell,
   Menu,
   dialog,
+  clipboard,
+  session,
 } = require('electron');
 const path = require('path');
 
@@ -32,17 +34,35 @@ function enableClipboard(win) {
   });
 }
 
+// Citation links come from AI output, so treat every URL handed to the OS as
+// untrusted: parse it properly, web schemes only, no embedded credentials.
+function safeExternalUrl(url) {
+  if (typeof url !== 'string' || url.length > 2048) return null;
+  let u;
+  try { u = new URL(url); } catch { return null; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+  if (u.username || u.password) return null;
+  return u.href;
+}
+function openExternalSafe(url) {
+  const safe = safeExternalUrl(url);
+  if (safe) shell.openExternal(safe);
+}
+
+// Pages may only navigate within our own bundled files.
+const APP_DIR_URL = require('url').pathToFileURL(__dirname + path.sep).href;
+
 // Security: never let a window navigate away from our bundled pages or spawn a
 // new Electron window. External links are handed to the system browser instead.
 function hardenWindow(win) {
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    openExternalSafe(url);
     return { action: 'deny' };
   });
   win.webContents.on('will-navigate', (e, url) => {
-    if (!url.startsWith('file://')) {
+    if (!url.startsWith(APP_DIR_URL)) {
       e.preventDefault();
-      if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+      openExternalSafe(url);
     }
   });
   win.webContents.on('will-attach-webview', (e) => e.preventDefault());
@@ -131,6 +151,7 @@ function createOverlay() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   });
 
@@ -160,6 +181,7 @@ function openSettings() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   });
   settingsWin.setMenuBarVisibility(false);
@@ -232,6 +254,7 @@ function runSelector(display, backgroundDataUrl) {
         preload: path.join(__dirname, 'preload.js'),
         contextIsolation: true,
         nodeIntegration: false,
+        sandbox: true,
       },
     });
     selectorWin.setAlwaysOnTop(true, 'screen-saver');
@@ -323,7 +346,7 @@ function nextScope(scope, settings) {
 ipcMain.handle('ai:ask', async (e, { text, imageDataUrl, history, reqId, forceFresh, scope = 'trusted' }) => {
   const settings = loadSettings();
   const lc = logReader.getContext();
-  const zone = lc.zone || '';
+  const zone = lc.zoneRaw || lc.zone || ''; // keyed per difficulty: drops differ
 
   // Instant, free repeats from the local cache (only the initial trusted ask).
   if (scope === 'trusted' && !imageDataUrl && !forceFresh) {
@@ -385,12 +408,22 @@ ipcMain.handle('app:version', () => {
   return { version, label: friendlyLabel(version), autoUpdate: CAN_AUTO_UPDATE, portable: IS_PORTABLE };
 });
 
+// The update feed is compiled in, never read from settings: an editable feed
+// URL would let anything that can write settings.json point the "Download"
+// button at a lookalike page. The download link it returns must stay on our
+// own releases page for the same reason.
+const UPDATE_FEED_URL = 'https://github.com/cadetmedia/EQAI/releases/latest/download/latest.json';
+const RELEASES_PREFIX = 'https://github.com/cadetmedia/EQAI/releases';
+function releaseUrl(url) {
+  const safe = safeExternalUrl(url);
+  return safe && (safe === RELEASES_PREFIX || safe.startsWith(`${RELEASES_PREFIX}/`)) ? safe : RELEASES_PREFIX;
+}
+
 // Portable / dev fallback: read latest.json and compare versions ourselves.
 async function checkLatestJson() {
   const current = app.getVersion();
   const base = { current, currentLabel: friendlyLabel(current), mode: 'manual' };
-  const url = loadSettings().updateFeedUrl;
-  if (!url) return { ...base, error: 'No update server is configured.' };
+  const url = UPDATE_FEED_URL;
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 8000);
@@ -405,7 +438,7 @@ async function checkLatestJson() {
       latest: feed.version,
       latestLabel: feed.label || friendlyLabel(feed.version),
       updateAvailable,
-      url: feed.url || '',
+      url: releaseUrl(feed.url),
       notes: feed.notes || '',
     };
   } catch {
@@ -465,8 +498,11 @@ function setupAutoUpdater() {
 }
 
 // Open cited source links in the user's real browser, not inside the overlay.
-ipcMain.on('open-external', (_e, url) => {
-  if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
+ipcMain.on('open-external', (_e, url) => openExternalSafe(url));
+
+// Clipboard writes go through main, so renderers need no clipboard permission.
+ipcMain.on('clipboard:write', (_e, text) => {
+  if (typeof text === 'string') clipboard.writeText(text);
 });
 
 ipcMain.on('overlay:open-settings', () => openSettings());
@@ -515,6 +551,11 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
+    // EQAI's pages need no browser permissions (camera, mic, notifications,
+    // clipboard...). Deny them all; screen capture runs in main, not a page.
+    session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+    session.defaultSession.setPermissionCheckHandler(() => false);
+
     // A minimal menu with edit roles registers the Ctrl+C/V/X/A accelerators.
     Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'editMenu' }]));
 

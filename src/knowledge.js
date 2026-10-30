@@ -88,6 +88,31 @@ async function politeFetch(url) {
   }
 }
 
+// A busy wiki answers maxlag with HTTP 200 + an error body (and Retry-After),
+// so res.ok alone can't tell "no such page" from "try later". Retry once on
+// maxlag / 429 / 5xx; anything still failing throws, so callers never cache a
+// transient refusal as a negative result.
+function retryDelay(res) {
+  const s = Number(res.headers.get('retry-after'));
+  return Math.min(Number.isFinite(s) && s > 0 ? s * 1000 : 2000, 5000);
+}
+async function wikiJson(url) {
+  for (let attempt = 0; ; attempt++) {
+    const res = await politeFetch(url);
+    let busy = res.status === 429 || res.status >= 500;
+    let body = null;
+    if (!busy) {
+      if (!res.ok) throw new Error(`wiki HTTP ${res.status}`);
+      body = await res.json();
+      busy = !!(body && body.error && body.error.code === 'maxlag');
+      if (!busy && body && body.error) throw new Error(`wiki error ${body.error.code}`);
+    }
+    if (!busy) return body;
+    if (attempt >= 1) throw new Error('wiki busy');
+    await new Promise((r) => setTimeout(r, retryDelay(res)));
+  }
+}
+
 async function detectWikiBase() {
   if (store.wikiBase) return store.wikiBase;
   for (const base of WIKI_CANDIDATES) {
@@ -113,12 +138,10 @@ async function wikiLookup(term) {
   const base = await detectWikiBase();
   if (!base) return null;
   try {
-    const sr = await politeFetch(`${base}?action=opensearch&limit=1&format=json&maxlag=5&search=${encodeURIComponent(term)}`);
-    const sj = await sr.json();
-    const title = sj && sj[1] && sj[1][0];
+    const sj = await wikiJson(`${base}?action=opensearch&limit=1&format=json&maxlag=5&search=${encodeURIComponent(term)}`);
+    const title = Array.isArray(sj) && sj[1] && sj[1][0];
     if (!title) { store.wiki[key] = { at: Date.now(), negative: true }; save(); return null; }
-    const er = await politeFetch(`${base}?action=query&prop=extracts&explaintext=1&redirects=1&format=json&maxlag=5&titles=${encodeURIComponent(title)}`);
-    const ej = await er.json();
+    const ej = await wikiJson(`${base}?action=query&prop=extracts&explaintext=1&redirects=1&format=json&maxlag=5&titles=${encodeURIComponent(title)}`);
     const pages = ej && ej.query && ej.query.pages;
     const page = pages && Object.values(pages)[0];
     const extract = page && page.extract ? String(page.extract).slice(0, 1200) : '';
